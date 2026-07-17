@@ -1,0 +1,66 @@
+[package]
+name = "soothe-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Mirasoth <hello@mirasoth.ai>"]
+license = "MIT"
+description = "WebSocket client for talking to a running soothe-daemon"
+repository = "https://github.com/mirasoth/soothe-client-rust"
+homepage = "https://github.com/mirasoth/soothe-client-rust"
+documentation = "https://docs.rs/soothe-client"
+readme = "README.md"
+keywords = ["soothe", "websocket", "agent", "daemon"]
+categories = ["network-programming", "asynchronous", "api-bindings"]
+exclude = [".github/", "tests/integration/"]
+
+[lib]
+name = "soothe_client"
+path = "src/lib.rs"
+
+[dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tokio-tungstenite = { version = "0.26", features = ["connect"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+tokio-tungstenite = { version = "0.26", features = ["connect"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde_json = "1"
+tempfile = "3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[example]]
+name = "01_hello"
+path = "examples/01_hello.rs"
+
+[[example]]
+name = "02_stream_turn"
+path = "examples/02_stream_turn.rs"
+
+[[example]]
+name = "03_text_completion"
+path = "examples/03_text_completion.rs"
+
+[[example]]
+name = "04_multi_turn"
+path = "examples/04_multi_turn.rs"
+
+[[example]]
+name = "05_pool_service"
+path = "examples/05_pool_service.rs"
+
+[[example]]
+name = "06_jobs"
+path = "examples/06_jobs.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
