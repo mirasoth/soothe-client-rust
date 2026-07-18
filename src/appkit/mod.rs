@@ -9,7 +9,7 @@ mod turn_runner;
 
 pub use classifier::EventClassifier;
 pub use daemon_session::{DaemonSession, DaemonSessionOptions, SendTurnOptions, TurnChunk};
-pub use pool::{ConnectionPool, PoolConfig, PoolStats, PooledConn};
+pub use pool::{input_message_for_loop, ConnectionPool, PoolConfig, PoolStats, PooledConn};
 pub use query_gate::{ErrQueryBusy, QueryGate};
 pub use session_store::{InMemorySessionStore, SessionRecord, SessionStore};
 pub use turn_runner::{InputOpts, TimeoutPolicy, TurnConfig, TurnRunner};

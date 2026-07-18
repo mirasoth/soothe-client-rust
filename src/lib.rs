@@ -18,6 +18,7 @@ pub mod client;
 pub mod command_client;
 pub mod config;
 pub mod errors;
+pub mod events;
 pub mod helpers;
 pub mod intent_hints;
 pub mod protocol;
@@ -30,6 +31,13 @@ pub use config::{load_config_from_env, Config};
 pub use errors::{
     disconnect_cause_name, ConnectionError, DaemonError, DisconnectCause, ReconnectError,
     StaleLoopError, TimeoutError,
+};
+pub use events::{
+    EVENT_DEEP_RESEARCH_COMPLETED, EVENT_DEEP_RESEARCH_CRAWL_SUMMARY,
+    EVENT_DEEP_RESEARCH_GATHER_SUMMARY, EVENT_DEEP_RESEARCH_PROGRESS, EVENT_DEEP_RESEARCH_STARTED,
+    EVENT_DEEP_RESEARCH_STEP_COMPLETED, EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_MILESTONE,
+    EVENT_EXPLORER_STARTED, EVENT_EXPLORER_STEP_COMPLETED, EVENT_LOOP_REATTACHED_WIRE,
+    EVENT_PLAN_CREATED, EVENT_REPLAY_COMPLETE,
 };
 pub use helpers::{
     check_daemon_status, fetch_config_section, fetch_loop_cards, fetch_loop_history,

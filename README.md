@@ -38,6 +38,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 More patterns: [`examples/`](examples/) (hello → streaming → multi-turn → pool → jobs).
 
+Route to a specialist with `preferred_subagent` (canonical ids: `explorer`,
+`deep_research`, `academic_research`, `browser_use`, `planner`):
+
+```rust
+use soothe_client::{Client, SendInputOptions};
+
+# async fn demo() -> Result<(), soothe_client::errors::Error> {
+let client = Client::new("ws://127.0.0.1:8765");
+client.connect().await?;
+client
+    .send_input(
+        "Find the auth middleware",
+        SendInputOptions {
+            preferred_subagent: Some("explorer".into()),
+            ..Default::default()
+        },
+    )
+    .await?;
+# Ok(())
+# }
+```
+
 ## What you get
 
 | Need | Use |

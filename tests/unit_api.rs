@@ -1,5 +1,9 @@
 //! Unit tests: protocol, public API surface, stream terminals.
 
+use soothe_client::appkit::{input_message_for_loop, InputOpts};
+use soothe_client::events::{
+    EVENT_DEEP_RESEARCH_STARTED, EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_STARTED,
+};
 use soothe_client::intent_hints::{validate_loop_input_intent_hint, TEXT_COMPLETION};
 use soothe_client::protocol::{
     expand_wire_messages, new_connection_init, new_request, new_request_id, PROTO_VERSION,
@@ -53,4 +57,39 @@ fn stream_terminal_helpers() {
     assert!(is_turn_progress_chunk("messages", &serde_json::json!({})));
     assert!(validate_loop_input_intent_hint(TEXT_COMPLETION).is_none());
     assert!(validate_loop_input_intent_hint("direct_llm").is_some());
+}
+
+#[test]
+fn preferred_subagent_in_loop_input() {
+    let msg = input_message_for_loop(
+        "find auth",
+        "loop-1",
+        None,
+        Some(&InputOpts {
+            intent_hint: Some(TEXT_COMPLETION.into()),
+            preferred_subagent: Some("explorer".into()),
+            ..Default::default()
+        }),
+    );
+    assert_eq!(
+        msg.get("preferred_subagent").and_then(|v| v.as_str()),
+        Some("explorer")
+    );
+    assert_eq!(
+        msg.get("intent_hint").and_then(|v| v.as_str()),
+        Some(TEXT_COMPLETION)
+    );
+}
+
+#[test]
+fn subagent_event_constants() {
+    assert_eq!(EVENT_EXPLORER_STARTED, "soothe.subagent.explorer.started");
+    assert_eq!(
+        EVENT_EXPLORER_COMPLETED,
+        "soothe.subagent.explorer.completed"
+    );
+    assert_eq!(
+        EVENT_DEEP_RESEARCH_STARTED,
+        "soothe.subagent.deep_research.started"
+    );
 }
