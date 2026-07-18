@@ -285,14 +285,97 @@ impl CommandClient {
         self.block(self.inner.job_status(job_id))
     }
 
+    /// `job_pause`.
+    pub fn job_pause(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.job_pause(job_id))
+    }
+
+    /// `job_resume`.
+    pub fn job_resume(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.job_resume(job_id))
+    }
+
     /// `job_cancel`.
     pub fn job_cancel(&self, job_id: &str) -> Result<Map<String, Value>> {
         self.block(self.inner.job_cancel(job_id))
     }
 
+    /// `job_dag`.
+    pub fn job_dag(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.job_dag(job_id))
+    }
+
+    /// `job_guidance`.
+    pub fn job_guidance(
+        &self,
+        job_id: &str,
+        content: &str,
+        goal_id: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        self.block(self.inner.job_guidance(job_id, content, goal_id))
+    }
+
     /// `autopilot_status`.
     pub fn autopilot_status(&self) -> Result<Map<String, Value>> {
         self.block(self.inner.autopilot_status())
+    }
+
+    /// `autopilot_submit`.
+    pub fn autopilot_submit(
+        &self,
+        description: &str,
+        priority: i32,
+        workspace: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        self.block(
+            self.inner
+                .autopilot_submit(description, priority, workspace),
+        )
+    }
+
+    /// `autopilot_list_goals`.
+    pub fn autopilot_list_goals(&self) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_list_goals())
+    }
+
+    /// `autopilot_get_goal`.
+    pub fn autopilot_get_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_get_goal(goal_id))
+    }
+
+    /// `autopilot_cancel_goal`.
+    pub fn autopilot_cancel_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_cancel_goal(goal_id))
+    }
+
+    /// `autopilot_cancel_all`.
+    pub fn autopilot_cancel_all(&self) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_cancel_all())
+    }
+
+    /// `autopilot_wake`.
+    pub fn autopilot_wake(&self) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_wake())
+    }
+
+    /// `autopilot_dream`.
+    pub fn autopilot_dream(&self) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_dream())
+    }
+
+    /// `autopilot_resume`.
+    pub fn autopilot_resume(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_resume(goal_id))
+    }
+
+    /// `autopilot_list_jobs`.
+    pub fn autopilot_list_jobs(&self) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_list_jobs())
+    }
+
+    /// `autopilot_get_job`.
+    pub fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_get_job(job_id))
     }
 
     /// `cron_add`.
@@ -303,6 +386,21 @@ impl CommandClient {
     /// `cron_list`.
     pub fn cron_list(&self, status: Option<&str>) -> Result<Map<String, Value>> {
         self.block(self.inner.cron_list(status))
+    }
+
+    /// `cron_show`.
+    pub fn cron_show(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.cron_show(job_id))
+    }
+
+    /// `cron_cancel`.
+    pub fn cron_cancel(&self, job_id: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.cron_cancel(job_id))
+    }
+
+    /// `memory_stats`.
+    pub fn memory_stats(&self, mode: &str) -> Result<Map<String, Value>> {
+        self.block(self.inner.memory_stats(mode))
     }
 
     /// Generic request.

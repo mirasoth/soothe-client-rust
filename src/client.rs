@@ -14,6 +14,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use crate::errors::{
     ConnectionError, DaemonError, DisconnectCause, Error, Result, StaleLoopError, TimeoutError,
 };
+use crate::heartbeat::HeartbeatTracker;
 use crate::protocol::{
     decode_message, expand_wire_messages, new_connection_init, new_notification, new_ping,
     new_pong, new_request, new_subscribe, new_unsubscribe, Envelope,
@@ -82,6 +83,7 @@ pub struct SendInputOptions {
 }
 
 type RpcWaiter = oneshot::Sender<std::result::Result<Value, DaemonError>>;
+type StreamDegradedCallback = Arc<dyn Fn(u64, String) + Send + Sync>;
 
 struct Shared {
     url: String,
@@ -97,6 +99,9 @@ struct Shared {
     inbound_dropped: AtomicU64,
     delivery_seq: Mutex<HashMap<String, u64>>,
     heartbeat_interval_ms: Mutex<Option<u64>>,
+    stream_degraded_cb: std::sync::Mutex<Option<StreamDegradedCallback>>,
+    degraded_notified: AtomicBool,
+    heartbeat_tracker: std::sync::Mutex<Option<Arc<HeartbeatTracker>>>,
 }
 
 /// Long-lived protocol-1 WebSocket client.
@@ -131,6 +136,9 @@ impl Client {
                 inbound_dropped: AtomicU64::new(0),
                 delivery_seq: Mutex::new(HashMap::new()),
                 heartbeat_interval_ms: Mutex::new(None),
+                stream_degraded_cb: std::sync::Mutex::new(None),
+                degraded_notified: AtomicBool::new(false),
+                heartbeat_tracker: std::sync::Mutex::new(None),
             }),
         }
     }
@@ -154,6 +162,67 @@ impl Client {
     /// Count of dropped inbound frames under backpressure.
     pub fn inbound_dropped(&self) -> u64 {
         self.shared.inbound_dropped.load(Ordering::SeqCst)
+    }
+
+    /// Register a hook invoked on the first inbound overflow drop.
+    pub fn set_stream_degraded_callback(&self, cb: Option<Arc<dyn Fn(u64, String) + Send + Sync>>) {
+        *self
+            .shared
+            .stream_degraded_cb
+            .lock()
+            .expect("stream_degraded lock") = cb;
+        self.shared.degraded_notified.store(false, Ordering::SeqCst);
+    }
+
+    /// Enable heartbeat tracking with the default 15s alive threshold.
+    pub fn enable_heartbeat_tracking(&self) -> Arc<HeartbeatTracker> {
+        self.enable_heartbeat_tracking_with_threshold(Duration::from_secs(15))
+    }
+
+    /// Enable heartbeat tracking with a custom alive threshold.
+    pub fn enable_heartbeat_tracking_with_threshold(
+        &self,
+        threshold: Duration,
+    ) -> Arc<HeartbeatTracker> {
+        let tracker = Arc::new(HeartbeatTracker::with_threshold(threshold));
+        *self
+            .shared
+            .heartbeat_tracker
+            .lock()
+            .expect("heartbeat lock") = Some(tracker.clone());
+        tracker
+    }
+
+    /// Disable heartbeat tracking.
+    pub fn disable_heartbeat_tracking(&self) {
+        *self
+            .shared
+            .heartbeat_tracker
+            .lock()
+            .expect("heartbeat lock") = None;
+    }
+
+    /// Current heartbeat tracker, if enabled.
+    pub fn heartbeat_tracker(&self) -> Option<Arc<HeartbeatTracker>> {
+        self.shared
+            .heartbeat_tracker
+            .lock()
+            .expect("heartbeat lock")
+            .clone()
+    }
+
+    /// Whether the tracked daemon is considered alive (true if tracking disabled).
+    pub fn is_daemon_alive(&self) -> bool {
+        match self
+            .shared
+            .heartbeat_tracker
+            .lock()
+            .expect("heartbeat lock")
+            .as_ref()
+        {
+            Some(t) => t.get_health().is_alive,
+            None => true,
+        }
     }
 
     /// Disconnect cause if disconnected.
@@ -310,6 +379,24 @@ impl Client {
         }
         self.shared.mark_disconnected(DisconnectCause::Clean).await;
         Ok(())
+    }
+
+    /// Re-dial and re-handshake after a connection drop.
+    ///
+    /// Does not re-establish loop subscriptions; follow with
+    /// [`Self::reattach_and_probe`] to resume a loop session.
+    pub async fn reconnect(&self) -> Result<()> {
+        {
+            let mut tx = self.shared.write_tx.lock().await;
+            *tx = None;
+        }
+        self.shared.connected.store(false, Ordering::SeqCst);
+        self.shared.reader_alive.store(false, Ordering::SeqCst);
+        *self.shared.disconnect_cause.lock().await = None;
+        self.shared.rpc_waiters.lock().await.clear();
+        self.shared.inbound.lock().await.clear();
+        self.shared.degraded_notified.store(false, Ordering::SeqCst);
+        self.connect().await
     }
 
     /// Send a raw envelope.
@@ -582,6 +669,303 @@ impl Client {
             .await
     }
 
+    /// `loop_state_update`.
+    pub async fn loop_state_update(
+        &self,
+        loop_id: &str,
+        state: Map<String, Value>,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        params.insert("state".into(), Value::Object(state));
+        self.request("loop_state_update", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `loop_tree`.
+    pub async fn loop_tree(
+        &self,
+        loop_id: &str,
+        format: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        if let Some(f) = format {
+            if !f.is_empty() {
+                params.insert("format".into(), json!(f));
+            }
+        }
+        self.request("loop_tree", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `loop_prune`.
+    pub async fn loop_prune(
+        &self,
+        loop_id: &str,
+        retention_days: Option<i32>,
+        dry_run: bool,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        if let Some(d) = retention_days {
+            if d > 0 {
+                params.insert("retention_days".into(), json!(d));
+            }
+        }
+        if dry_run {
+            params.insert("dry_run".into(), json!(true));
+        }
+        self.request("loop_prune", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `loop_delete`.
+    pub async fn loop_delete(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        self.request("loop_delete", params, Duration::from_secs(10))
+            .await
+    }
+
+    /// Detach from a loop by unsubscribing (`subscription_id` from `loop_subscribe`).
+    pub async fn loop_detach(&self, subscription_id: &str) -> Result<()> {
+        self.unsubscribe(subscription_id).await
+    }
+
+    /// Authenticate with access/secret keys.
+    pub async fn authenticate(
+        &self,
+        access_key: &str,
+        secret_key: &str,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("access_key".into(), json!(access_key));
+        params.insert("secret_key".into(), json!(secret_key));
+        self.request("auth", params, Duration::from_secs(15)).await
+    }
+
+    /// Refresh auth token.
+    pub async fn refresh_auth_token(&self, refresh_token: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("refresh_token".into(), json!(refresh_token));
+        self.request("auth_refresh", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_create` on this long-lived connection.
+    pub async fn job_create(
+        &self,
+        goal: &str,
+        workspace: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("goal".into(), json!(goal));
+        if let Some(ws) = workspace {
+            params.insert("workspace".into(), json!(ws));
+        }
+        self.request("job_create", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `job_status`.
+    pub async fn job_status(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("job_status", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_pause`.
+    pub async fn job_pause(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("job_pause", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_resume`.
+    pub async fn job_resume(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("job_resume", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_cancel`.
+    pub async fn job_cancel(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("job_cancel", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_dag`.
+    pub async fn job_dag(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("job_dag", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `job_guidance`.
+    pub async fn job_guidance(
+        &self,
+        job_id: &str,
+        content: &str,
+        goal_id: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        params.insert("content".into(), json!(content));
+        if let Some(g) = goal_id {
+            params.insert("goal_id".into(), json!(g));
+        }
+        self.request("job_guidance", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `autopilot_status`.
+    pub async fn autopilot_status(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_status", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_submit`.
+    pub async fn autopilot_submit(
+        &self,
+        description: &str,
+        priority: i32,
+        workspace: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("description".into(), json!(description));
+        params.insert("priority".into(), json!(priority));
+        if let Some(ws) = workspace {
+            params.insert("workspace".into(), json!(ws));
+        }
+        self.request("autopilot_submit", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `autopilot_list_goals`.
+    pub async fn autopilot_list_goals(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_list_goals", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_get_goal`.
+    pub async fn autopilot_get_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("goal_id".into(), json!(goal_id));
+        self.request("autopilot_get_goal", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_cancel_goal`.
+    pub async fn autopilot_cancel_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("goal_id".into(), json!(goal_id));
+        self.request("autopilot_cancel_goal", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_cancel_all`.
+    pub async fn autopilot_cancel_all(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_cancel_all", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_wake`.
+    pub async fn autopilot_wake(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_wake", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_dream`.
+    pub async fn autopilot_dream(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_dream", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_resume`.
+    pub async fn autopilot_resume(&self, goal_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("goal_id".into(), json!(goal_id));
+        self.request("autopilot_resume", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_list_jobs`.
+    pub async fn autopilot_list_jobs(&self) -> Result<Map<String, Value>> {
+        self.request("autopilot_list_jobs", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// `autopilot_get_job`.
+    pub async fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("autopilot_get_job", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// Subscribe to `autopilot_events` (long-lived worker stream).
+    pub async fn autopilot_subscribe(&self) -> Result<String> {
+        self.subscribe("autopilot_events", Map::new(), Duration::from_secs(15))
+            .await
+    }
+
+    /// Unsubscribe from an autopilot events subscription.
+    pub async fn autopilot_unsubscribe(&self, subscription_id: &str) -> Result<()> {
+        self.unsubscribe(subscription_id).await
+    }
+
+    /// `cron_add`.
+    pub async fn cron_add(&self, text: &str, priority: Option<i32>) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("text".into(), json!(text));
+        if let Some(p) = priority {
+            params.insert("priority".into(), json!(p));
+        }
+        self.request("cron_add", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `cron_list`.
+    pub async fn cron_list(&self, status: Option<&str>) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        if let Some(s) = status {
+            params.insert("status".into(), json!(s));
+        }
+        self.request("cron_list", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `cron_show`.
+    pub async fn cron_show(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("cron_show", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `cron_cancel`.
+    pub async fn cron_cancel(&self, job_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("job_id".into(), json!(job_id));
+        self.request("cron_cancel", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `memory_stats`.
+    pub async fn memory_stats(&self, mode: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("mode".into(), json!(mode));
+        self.request("memory_stats", params, Duration::from_secs(15))
+            .await
+    }
+
     /// `skills_list`.
     pub async fn list_skills(&self) -> Result<Map<String, Value>> {
         self.request("skills_list", Map::new(), Duration::from_secs(15))
@@ -675,6 +1059,25 @@ impl Shared {
             return;
         }
 
+        if msg.get("type").and_then(|v| v.as_str()) == Some("pong") {
+            if let Some(tracker) = self.heartbeat_tracker.lock().expect("hb").as_ref() {
+                tracker.note_pong();
+            }
+            return;
+        }
+
+        // Daemon heartbeat custom events (namespace / type heuristics).
+        let ns = msg
+            .get("namespace")
+            .or_else(|| msg.get("type"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if ns.contains("heartbeat") {
+            if let Some(tracker) = self.heartbeat_tracker.lock().expect("hb").as_ref() {
+                tracker.update(msg.get("data"));
+            }
+        }
+
         if inbound_needs_delivery_ack(&msg) {
             let loop_id = extract_loop_id_from_inbound(&msg);
             if !loop_id.is_empty() {
@@ -725,21 +1128,29 @@ impl Shared {
         let mut q = self.inbound.lock().await;
         if q.len() >= self.max_inbound {
             if critical {
-                // Drop a non-critical from the front if possible.
                 if let Some(pos) = q.iter().position(|m| !is_critical_inbound(m)) {
                     q.remove(pos);
-                    self.inbound_dropped.fetch_add(1, Ordering::SeqCst);
+                    self.note_inbound_drop("priority_evict");
                 } else {
-                    self.inbound_dropped.fetch_add(1, Ordering::SeqCst);
+                    self.note_inbound_drop("queue_full_critical");
                     return;
                 }
             } else {
-                self.inbound_dropped.fetch_add(1, Ordering::SeqCst);
+                self.note_inbound_drop("queue_full");
                 return;
             }
         }
         q.push_back(msg);
         self.inbound_notify.notify_one();
+    }
+
+    fn note_inbound_drop(&self, reason: &str) {
+        let n = self.inbound_dropped.fetch_add(1, Ordering::SeqCst) + 1;
+        if !self.degraded_notified.swap(true, Ordering::SeqCst) {
+            if let Some(cb) = self.stream_degraded_cb.lock().expect("cb").as_ref() {
+                cb(n, reason.to_string());
+            }
+        }
     }
 }
 

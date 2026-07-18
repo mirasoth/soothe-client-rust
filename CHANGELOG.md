@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — 2026-07-18
+
+### Added
+- `Client::reconnect`, auth (`authenticate` / `refresh_auth_token`), stream-degraded callback
+- Heartbeat tracking (`HeartbeatTracker` / `DaemonHealth`)
+- Loop admin RPCs: `loop_tree`, `loop_prune`, `loop_delete`, `loop_detach`, `loop_state_update`
+- Long-lived `Client` job / autopilot / cron / `memory_stats` helpers + `autopilot_subscribe`
+- Full event catalog parity with Go/TS + `parse_namespace` / `classify_event_verbosity`
+- Verbosity helpers (`VerbosityTier`, `should_show`)
+- Turn-boundary helpers (`format_turn_id`, `frame_turn_id`, `frame_seq`)
+- Sync `CommandClient` mirrors the full `AsyncCommandClient` surface
+
 ## 0.1.1 — 2026-07-18
 
 - Add client-facing subagent event constants (`EVENT_EXPLORER_*`, `EVENT_DEEP_RESEARCH_*`)

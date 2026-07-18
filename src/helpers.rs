@@ -148,3 +148,20 @@ pub async fn fetch_loop_history(client: &Client, loop_id: &str) -> Result<Map<St
 pub async fn fetch_loop_cards(client: &Client, loop_id: &str) -> Result<Map<String, Value>> {
     client.loop_cards_fetch(loop_id).await
 }
+
+/// Submit access_key/secret_key credentials via RPC.
+pub async fn request_auth(
+    client: &Client,
+    access_key: &str,
+    secret_key: &str,
+) -> Result<Map<String, Value>> {
+    client.authenticate(access_key, secret_key).await
+}
+
+/// Submit a refresh_token via RPC.
+pub async fn request_auth_refresh(
+    client: &Client,
+    refresh_token: &str,
+) -> Result<Map<String, Value>> {
+    client.refresh_auth_token(refresh_token).await
+}

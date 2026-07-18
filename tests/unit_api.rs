@@ -2,14 +2,17 @@
 
 use soothe_client::appkit::{input_message_for_loop, InputOpts};
 use soothe_client::events::{
-    EVENT_DEEP_RESEARCH_STARTED, EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_STARTED,
+    classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_STARTED,
+    EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
 };
 use soothe_client::intent_hints::{validate_loop_input_intent_hint, TEXT_COMPLETION};
 use soothe_client::protocol::{
     expand_wire_messages, new_connection_init, new_request, new_request_id, PROTO_VERSION,
 };
 use soothe_client::stream_terminal::{is_turn_end_custom_data, is_turn_progress_chunk, STREAM_END};
-use soothe_client::{AsyncCommandClient, Client, CommandClient, VERSION};
+use soothe_client::turn_boundary::{format_turn_id, parse_turn_generation};
+use soothe_client::verbosity::{should_show, VerbosityTier, VERBOSITY_QUIET};
+use soothe_client::{AsyncCommandClient, Client, CommandClient, HeartbeatTracker, VERSION};
 
 #[test]
 fn public_api_symbols_exist() {
@@ -92,4 +95,39 @@ fn subagent_event_constants() {
         EVENT_DEEP_RESEARCH_STARTED,
         "soothe.subagent.deep_research.started"
     );
+}
+
+#[test]
+fn verbosity_and_namespace() {
+    assert!(should_show(VerbosityTier::Quiet, VERBOSITY_QUIET));
+    assert_eq!(
+        classify_event_verbosity(EVENT_FINAL_REPORT),
+        VerbosityTier::Quiet
+    );
+    assert_eq!(
+        classify_event_verbosity(EVENT_TOOL_STARTED),
+        VerbosityTier::Internal
+    );
+    let p = parse_namespace("soothe.cognition.plan.created").unwrap();
+    assert_eq!(p.domain, "cognition");
+}
+
+#[test]
+fn turn_boundary_helpers() {
+    assert_eq!(format_turn_id("loop-1", 2), "loop-1:2");
+    assert_eq!(parse_turn_generation(Some("loop-1:2")), Some(2));
+}
+
+#[test]
+fn heartbeat_tracker_grace() {
+    let t = HeartbeatTracker::new();
+    assert!(t.get_health().is_alive);
+}
+
+#[test]
+fn sync_command_client_mirrors_async_surface() {
+    let _ = CommandClient::new("ws://127.0.0.1:8765");
+    // Compile-time presence of expanded sync wrappers.
+    let c = AsyncCommandClient::new("ws://127.0.0.1:8765");
+    let _ = c.with_timeout(std::time::Duration::from_secs(1));
 }
