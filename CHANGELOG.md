@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — 2026-07-19
+
+### Removed
+- Legacy `intent_hint` values `direct_llm`, `quiz`, and `direct_model` (rejected by validation)
+- Legacy loop phase `direct_model` from `DEFAULT_DELIVERABLE_PHASES`
+
 ## 0.2.0 — 2026-07-18
 
 ### Added

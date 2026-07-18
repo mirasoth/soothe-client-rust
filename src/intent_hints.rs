@@ -13,14 +13,14 @@ pub const EMBED: &str = "embed";
 pub const DEFAULT_DELIVERABLE_PHASES: &[&str] = &[
     "quiz",
     "goal_completion",
-    "direct_model",
+    "chitchat",
     "text_completion",
     "image_to_text",
     "ocr",
     "embed",
 ];
 
-const REMOVED: &[&str] = &["direct_llm", "quiz"];
+const REMOVED: &[&str] = &["direct_llm", "quiz", "direct_model"];
 
 /// Validate an intent hint; returns an error string when invalid.
 pub fn validate_loop_input_intent_hint(hint: &str) -> Option<String> {
