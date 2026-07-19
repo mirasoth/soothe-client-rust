@@ -122,7 +122,10 @@ mod tests {
         let mut b = TurnBoundary::default();
         assert!(b.feed_status("idle").is_none());
         b.feed_status("running");
-        b.feed_event("messages", &json!([{"type":"AIMessageChunk","content":"x"}]));
+        b.feed_event(
+            "messages",
+            &json!([{"type":"AIMessageChunk","content":"x"}]),
+        );
         assert_eq!(b.feed_status("idle"), Some(TURN_END_IDLE));
     }
 

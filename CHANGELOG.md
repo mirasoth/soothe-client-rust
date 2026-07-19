@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 — 2026-07-19
+
+### Fixed
+- `cargo fmt` on TurnBoundary unit tests (release CI)
+
 ## 0.2.3 — 2026-07-19
 
 ### Added
