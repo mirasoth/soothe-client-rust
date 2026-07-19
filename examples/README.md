@@ -9,7 +9,7 @@ Mirror the Python `examples/01`–`06` ladder. Require a live daemon
 | `02_stream_turn` | Stream chunks as they arrive |
 | `03_text_completion` | `intent_hint=text_completion` |
 | `04_multi_turn` | Follow-ups on the same loop |
-| `05_pool_service` | `ConnectionPool` + `TurnRunner` |
+| `05_pool_service` | `ConnectionPool` + `TurnRunner` (`TurnBoundary` = DaemonSession turn end) |
 | `06_jobs` | `AsyncCommandClient` job create/status/cancel |
 
 ```bash

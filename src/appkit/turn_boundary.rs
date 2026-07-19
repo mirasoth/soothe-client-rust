@@ -111,3 +111,45 @@ pub fn is_daemon_turn_end_event(completion_event: &str) -> bool {
         TURN_END_STREAM_END | TURN_END_IDLE | TURN_END_STOPPED
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn ignores_pre_running_idle() {
+        let mut b = TurnBoundary::default();
+        assert!(b.feed_status("idle").is_none());
+        b.feed_status("running");
+        b.feed_event("messages", &json!([{"type":"AIMessageChunk","content":"x"}]));
+        assert_eq!(b.feed_status("idle"), Some(TURN_END_IDLE));
+    }
+
+    #[test]
+    fn stream_end_requires_running_and_progress() {
+        let mut b = TurnBoundary::default();
+        let end = json!({"type": STREAM_END, "scope": "turn"});
+        assert!(b.feed_event("custom", &end).is_none());
+        b.feed_status("running");
+        assert!(b.feed_event("custom", &end).is_none());
+        b.feed_event("messages", &json!({}));
+        assert_eq!(b.feed_event("custom", &end), Some(TURN_END_STREAM_END));
+    }
+
+    #[test]
+    fn stopped_after_running() {
+        let mut b = TurnBoundary::default();
+        assert!(b.feed_status("stopped").is_none());
+        b.feed_status("running");
+        assert_eq!(b.feed_status("stopped"), Some(TURN_END_STOPPED));
+    }
+
+    #[test]
+    fn daemon_turn_end_event_helper() {
+        assert!(is_daemon_turn_end_event(TURN_END_STREAM_END));
+        assert!(!is_daemon_turn_end_event(
+            "soothe.protocol.message.goal_completion"
+        ));
+    }
+}

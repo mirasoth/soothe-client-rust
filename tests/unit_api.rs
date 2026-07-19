@@ -1,6 +1,9 @@
 //! Unit tests: protocol, public API surface, stream terminals.
 
-use soothe_client::appkit::{input_message_for_loop, InputOpts};
+use soothe_client::appkit::{
+    input_message_for_loop, is_daemon_turn_end_event, InputOpts, TurnBoundary, TURN_END_IDLE,
+    TURN_END_STREAM_END,
+};
 use soothe_client::events::{
     classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_STARTED,
     EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
@@ -60,6 +63,22 @@ fn stream_terminal_helpers() {
     assert!(is_turn_progress_chunk("messages", &serde_json::json!({})));
     assert!(validate_loop_input_intent_hint(TEXT_COMPLETION).is_none());
     assert!(validate_loop_input_intent_hint("direct_llm").is_some());
+}
+
+#[test]
+fn appkit_turn_boundary_public_surface() {
+    let mut b = TurnBoundary::default();
+    assert!(b.feed_status("idle").is_none());
+    b.feed_status("running");
+    b.feed_event(
+        "messages",
+        &serde_json::json!([{"type":"AIMessageChunk","content":"hi there reply"}]),
+    );
+    assert_eq!(b.feed_status("idle"), Some(TURN_END_IDLE));
+    assert!(is_daemon_turn_end_event(TURN_END_STREAM_END));
+    assert!(!is_daemon_turn_end_event(
+        "soothe.protocol.message.goal_completion"
+    ));
 }
 
 #[test]

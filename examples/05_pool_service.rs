@@ -1,4 +1,7 @@
 //! ConnectionPool + TurnRunner for two sessions.
+//!
+//! Turn end follows DaemonSession rules via `TurnBoundary` (gated `stream.end` /
+//! idle). Classifier phases are for UX early-complete only.
 
 #[path = "common/mod.rs"]
 mod common;
