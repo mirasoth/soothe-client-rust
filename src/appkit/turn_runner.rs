@@ -7,7 +7,6 @@ use serde_json::{json, Map, Value};
 
 use crate::client::SendInputOptions;
 use crate::errors::{Error, Result};
-use crate::stream_terminal::is_turn_end_custom_data;
 
 use super::classifier::EventClassifier;
 use super::pool::{input_message_for_loop, ConnectionPool};
@@ -162,8 +161,7 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
         let deadline = tokio::time::Instant::now() + self.cfg.query_timeout;
         let mut collected = String::new();
         let mut last_event = tokio::time::Instant::now();
-        let mut query_started = false;
-        let mut payload_seen = false;
+        let mut boundary = super::turn_boundary::TurnBoundary::default();
 
         loop {
             if tokio::time::Instant::now() > deadline {
@@ -207,14 +205,8 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
             let event_type = frame.get("type").and_then(|v| v.as_str()).unwrap_or("");
             if event_type == "status" {
                 let state = frame.get("state").and_then(|v| v.as_str()).unwrap_or("");
-                match state {
-                    "running" => query_started = true,
-                    "stopped" if query_started => break,
-                    "idle" if query_started && (payload_seen || !collected.is_empty()) => break,
-                    "idle" if query_started && self.classifier.treat_status_idle_as_complete => {
-                        break;
-                    }
-                    _ => {}
+                if boundary.feed_status(state).is_some() {
+                    break;
                 }
                 continue;
             }
@@ -223,11 +215,11 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
             }
             let mode = frame.get("mode").and_then(|v| v.as_str()).unwrap_or("");
             let data = frame.get("data").cloned().unwrap_or(Value::Null);
-            payload_seen = true;
             if let Some(text) = self.classifier.extract_text(mode, &data) {
                 collected.push_str(&text);
             }
-            if mode == "custom" && is_turn_end_custom_data(&data) {
+            // TurnBoundary owns stream.end / idle / stopped (DaemonSession parity).
+            if boundary.feed_event(mode, &data).is_some() {
                 break;
             }
         }

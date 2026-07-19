@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-07-19
+
+### Changed
+- `TurnRunner` ends turns via `TurnBoundary` (DaemonSession gated `stream.end` / idle / stopped; Go v0.4.4 parity)
+
+### Added
+- `appkit::TurnBoundary`, `TurnLifecycleGate`, `is_daemon_turn_end_event`
+
 ## 0.2.1 — 2026-07-19
 
 ### Removed
