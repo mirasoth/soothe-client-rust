@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 More patterns: [`examples/`](examples/) (hello → streaming → multi-turn → pool → jobs).
 
-Route to a specialist with `preferred_subagent` (canonical ids: `explorer`,
+Route to a specialist with `preferred_subagent` (canonical ids:
 `deep_research`, `academic_research`, `browser_use`, `planner`):
 
 ```rust
@@ -49,9 +49,9 @@ let client = Client::new("ws://127.0.0.1:8765");
 client.connect().await?;
 client
     .send_input(
-        "Find the auth middleware",
+        "Research recent agent evaluation benchmarks",
         SendInputOptions {
-            preferred_subagent: Some("explorer".into()),
+            preferred_subagent: Some("deep_research".into()),
             ..Default::default()
         },
     )

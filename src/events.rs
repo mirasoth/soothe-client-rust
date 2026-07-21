@@ -35,15 +35,6 @@ pub const EVENT_GOAL_DIRECTIVES_APPLIED: &str = "soothe.cognition.goal.directive
 // Subagents
 // ---------------------------------------------------------------------------
 
-/// Explorer started.
-pub const EVENT_EXPLORER_STARTED: &str = "soothe.subagent.explorer.started";
-/// Explorer milestone.
-pub const EVENT_EXPLORER_MILESTONE: &str = "soothe.subagent.explorer.milestone";
-/// Explorer step completed.
-pub const EVENT_EXPLORER_STEP_COMPLETED: &str = "soothe.subagent.explorer.step.completed";
-/// Explorer completed.
-pub const EVENT_EXPLORER_COMPLETED: &str = "soothe.subagent.explorer.completed";
-
 /// Deep research started.
 pub const EVENT_DEEP_RESEARCH_STARTED: &str = "soothe.subagent.deep_research.started";
 /// Deep research progress.

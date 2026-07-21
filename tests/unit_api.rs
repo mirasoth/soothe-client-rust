@@ -5,8 +5,8 @@ use soothe_client::appkit::{
     TURN_END_STREAM_END,
 };
 use soothe_client::events::{
-    classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_STARTED,
-    EVENT_EXPLORER_COMPLETED, EVENT_EXPLORER_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
+    classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_COMPLETED,
+    EVENT_DEEP_RESEARCH_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
 };
 use soothe_client::intent_hints::{validate_loop_input_intent_hint, TEXT_COMPLETION};
 use soothe_client::protocol::{
@@ -89,13 +89,13 @@ fn preferred_subagent_in_loop_input() {
         None,
         Some(&InputOpts {
             intent_hint: Some(TEXT_COMPLETION.into()),
-            preferred_subagent: Some("explorer".into()),
+            preferred_subagent: Some("deep_research".into()),
             ..Default::default()
         }),
     );
     assert_eq!(
         msg.get("preferred_subagent").and_then(|v| v.as_str()),
-        Some("explorer")
+        Some("deep_research")
     );
     assert_eq!(
         msg.get("intent_hint").and_then(|v| v.as_str()),
@@ -105,14 +105,13 @@ fn preferred_subagent_in_loop_input() {
 
 #[test]
 fn subagent_event_constants() {
-    assert_eq!(EVENT_EXPLORER_STARTED, "soothe.subagent.explorer.started");
-    assert_eq!(
-        EVENT_EXPLORER_COMPLETED,
-        "soothe.subagent.explorer.completed"
-    );
     assert_eq!(
         EVENT_DEEP_RESEARCH_STARTED,
         "soothe.subagent.deep_research.started"
+    );
+    assert_eq!(
+        EVENT_DEEP_RESEARCH_COMPLETED,
+        "soothe.subagent.deep_research.completed"
     );
 }
 
