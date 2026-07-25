@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 — 2026-07-25
+
+### Added
+- **Appkit parity with Go 0.4.x:** `SseBroadcaster`, image `attachments` (`image` feature),
+  `chunk_filter` / `EarlyDropFn`, deep `EventClassifier` (`Classify` / `ClassifyTurn`),
+  thinking-step extraction, `TurnEventStats`, `AppKey`, full `QueryGate` cancel-before-context
+- **TurnRunner:** pre-send settle-drain, arm-before-end (Go 0.4.6–0.4.8), SSE hooks,
+  `ExecuteReserved`, attachment compaction knobs, idle floor with attachments
+- **ConnectionPool:** dedicated `receive_messages` reader, `reader_live`, rebuild on dead stream,
+  optional client factory / bootstrap hooks
+- **DaemonSession:** `rpc_client()`, early-drop filtering, turn event stats, cancel-seen tracking
+- **Transport:** graded `inbound_frame_drop_priority`, `is_handshake_complete` / `readiness_state`,
+  fire-and-forget `send_job_*` methods
+
+### Changed
+- Crate version `0.3.0`; `EventClassifier::with_defaults()` is the preferred constructor
+- `input_message_for_loop` returns a protocol-1 notification envelope (params nested)
+
 ## 0.2.4 — 2026-07-19
 
 ### Fixed

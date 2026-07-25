@@ -68,7 +68,16 @@ client
 | Jobs / cron (async) | `AsyncCommandClient` |
 | Jobs / cron (scripts / sync) | `CommandClient` |
 | Raw WebSocket / custom RPCs | `Client` |
-| Many users / HTTP backend | `ConnectionPool` + `TurnRunner` |
+| Many users / HTTP backend | `ConnectionPool` + `TurnRunner` (+ optional `SseBroadcaster`) |
+
+`DaemonSession` uses a dual-socket layout (stream + RPC sidecar): peels leftover
+prior-goal terminals, applies early chunk filtering, ignores premature
+`soothe.stream.end` until the turn has progress, drains a short post-idle window,
+and sends `delivery_ack` on terminal frames.
+
+`TurnRunner` ends turns via `TurnBoundary` (gated `stream.end` / idle / stopped),
+with pre-send settle-drain and arm-before-end so pooled leftovers cannot end the
+next turn early.
 
 ## Develop
 

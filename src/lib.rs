@@ -21,8 +21,10 @@ pub mod errors;
 pub mod events;
 pub mod heartbeat;
 pub mod helpers;
+pub mod inbound_priority;
 pub mod intent_hints;
 pub mod protocol;
+pub mod send_methods;
 pub mod session;
 pub mod stream_terminal;
 pub mod turn_boundary;
@@ -32,8 +34,8 @@ pub use client::{Client, ClientConfig, SendInputOptions};
 pub use command_client::{AsyncCommandClient, CommandClient};
 pub use config::{load_config_from_env, Config};
 pub use errors::{
-    disconnect_cause_name, ConnectionError, DaemonError, DisconnectCause, ReconnectError,
-    StaleLoopError, TimeoutError,
+    disconnect_cause_name, ConnectionError, DaemonError, DisconnectCause, HeartbeatError,
+    ReconnectError, StaleLoopError, TimeoutError,
 };
 pub use events::{
     classify_event_verbosity, is_completion_event, is_subagent_progress_event, parse_namespace,
@@ -60,14 +62,21 @@ pub use helpers::{
     fetch_skills_catalog, is_daemon_live, protocol1_rpc, request_auth, request_auth_refresh,
     request_daemon_config_reload, request_daemon_shutdown, websocket_url_from_env,
 };
+pub use inbound_priority::{
+    inbound_frame_drop_priority, DEFAULT_INBOUND_MAX_SIZE, DROP_PRIORITY_CRITICAL,
+    DROP_PRIORITY_HIGH, DROP_PRIORITY_NORMAL,
+};
 pub use intent_hints::{
     validate_loop_input_intent_hint, DEFAULT_DELIVERABLE_PHASES, EMBED, IMAGE_TO_TEXT, OCR,
     TEXT_COMPLETION,
 };
 pub use protocol::{
-    decode_message, expand_wire_messages, new_connection_init, new_notification, new_ping,
-    new_pong, new_request, new_request_id, new_subscribe, new_unsubscribe, Envelope, ErrorObject,
-    MessageType, CLIENT_VERSION, DEFAULT_CLIENT_CAPABILITIES, PROTO_VERSION,
+    as_str, decode_message, decode_message_typed, expand_wire_messages, extract_soothe_loop_id,
+    is_loop_assistant_phase, new_connection_init, new_notification, new_ping, new_pong,
+    new_request, new_request_id, new_request_with_id, new_subscribe, new_unsubscribe,
+    next_to_event_message, params_map, split_wire_payload, BaseMessage, Envelope, ErrorObject,
+    EventMessage, LoopAIMessage, MessageType, StatusResponse, TypedMessage, CLIENT_VERSION,
+    DEFAULT_CLIENT_CAPABILITIES, PROTO_VERSION,
 };
 pub use session::{bootstrap_loop_session, connect_with_retries, BootstrapOptions};
 pub use stream_terminal::{

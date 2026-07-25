@@ -1,6 +1,6 @@
 //! Shared helpers for examples.
 
-#![allow(dead_code)]
+#![allow(dead_code)] // shared by multiple examples; not every helper is used in each binary
 
 use std::env;
 use std::time::Duration;

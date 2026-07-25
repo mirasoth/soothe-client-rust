@@ -11,8 +11,17 @@ use crate::errors::{Error, Result};
 use crate::session::{bootstrap_loop_session, connect_with_retries, BootstrapOptions};
 use crate::stream_terminal::{is_turn_end_custom_data, is_turn_progress_chunk, STREAM_END};
 
+use super::chunk_filter::should_drop_stream_chunk_early;
+use super::observability::TurnEventStats;
+
+/// Default post-idle drain window (Go `DefaultPostIdleDrain`).
+pub const DEFAULT_POST_IDLE_DRAIN: Duration = Duration::from_millis(500);
+
+/// Filters non-actionable stream chunks before yield (Go `EarlyDropFn`).
+pub type EarlyDropFn = Arc<dyn Fn(&[Value], &str, &Value) -> bool + Send + Sync>;
+
 /// Options for constructing a DaemonSession.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DaemonSessionOptions {
     /// Workspace path.
     pub workspace: Option<String>,
@@ -20,6 +29,8 @@ pub struct DaemonSessionOptions {
     pub stream_delivery: String,
     /// Post-idle drain window.
     pub post_idle_drain: Duration,
+    /// Optional early-drop filter (defaults to [`should_drop_stream_chunk_early`]).
+    pub early_drop_fn: Option<EarlyDropFn>,
 }
 
 impl Default for DaemonSessionOptions {
@@ -27,8 +38,23 @@ impl Default for DaemonSessionOptions {
         Self {
             workspace: None,
             stream_delivery: "adaptive".into(),
-            post_idle_drain: Duration::from_millis(500),
+            post_idle_drain: DEFAULT_POST_IDLE_DRAIN,
+            early_drop_fn: None,
         }
+    }
+}
+
+impl std::fmt::Debug for DaemonSessionOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DaemonSessionOptions")
+            .field("workspace", &self.workspace)
+            .field("stream_delivery", &self.stream_delivery)
+            .field("post_idle_drain", &self.post_idle_drain)
+            .field(
+                "early_drop_fn",
+                &self.early_drop_fn.as_ref().map(|_| "<fn>"),
+            )
+            .finish()
     }
 }
 
@@ -74,8 +100,13 @@ pub struct DaemonSession {
     rpc_connected: Mutex<bool>,
     loop_id: Mutex<String>,
     read_lock: Mutex<()>,
+    early_drop_fn: EarlyDropFn,
+    /// Per-turn stream filtering counters.
+    pub turn_event_stats: Mutex<TurnEventStats>,
     /// Last turn end state label.
     pub last_turn_end_state: Mutex<String>,
+    /// Whether cancel was observed for the last turn.
+    pub last_turn_cancel_seen: Mutex<bool>,
     /// Last turn error message.
     pub last_turn_error_message: Mutex<String>,
 }
@@ -84,21 +115,35 @@ impl DaemonSession {
     /// Create a session for `ws_url`.
     pub fn new(ws_url: impl Into<String>, opts: Option<DaemonSessionOptions>) -> Self {
         let ws_url = ws_url.into();
+        let opts = opts.unwrap_or_default();
+        let early_drop_fn = opts.early_drop_fn.clone().unwrap_or_else(|| {
+            Arc::new(|ns: &[Value], mode: &str, data: &Value| {
+                should_drop_stream_chunk_early(ns, mode, data)
+            })
+        });
         Self {
             client: Client::new(&ws_url),
             rpc_client: Client::new(&ws_url),
             rpc_connected: Mutex::new(false),
             loop_id: Mutex::new(String::new()),
             read_lock: Mutex::new(()),
+            early_drop_fn,
+            turn_event_stats: Mutex::new(TurnEventStats::new()),
             last_turn_end_state: Mutex::new(String::new()),
+            last_turn_cancel_seen: Mutex::new(false),
             last_turn_error_message: Mutex::new(String::new()),
-            opts: opts.unwrap_or_default(),
+            opts,
         }
     }
 
     /// Stream socket.
     pub fn stream_client(&self) -> &Client {
         &self.client
+    }
+
+    /// RPC sidecar socket (lazy-connected for list/cards/history).
+    pub fn rpc_client(&self) -> &Client {
+        &self.rpc_client
     }
 
     /// Active loop id.
@@ -240,6 +285,8 @@ impl DaemonSession {
     async fn iter_turn_chunks_locked(&self, max_wait: Option<Duration>) -> Result<Vec<TurnChunk>> {
         *self.last_turn_end_state.lock().await = String::new();
         *self.last_turn_error_message.lock().await = String::new();
+        *self.last_turn_cancel_seen.lock().await = false;
+        *self.turn_event_stats.lock().await = TurnEventStats::new();
 
         let mut out = Vec::new();
         let mut query_started = false;
@@ -348,6 +395,7 @@ impl DaemonSession {
                 let content = frame.get("content").and_then(|v| v.as_str()).unwrap_or("");
                 if content.contains("Cancellation requested") {
                     cancel_seen = true;
+                    *self.last_turn_cancel_seen.lock().await = true;
                 }
                 continue;
             }
@@ -366,6 +414,15 @@ impl DaemonSession {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+
+            let ns_slice: Vec<Value> = match &namespace {
+                Value::Array(a) => a.clone(),
+                _ => vec![],
+            };
+            if (self.early_drop_fn)(&ns_slice, &mode, &data) {
+                self.turn_event_stats.lock().await.filtered_early += 1;
+                continue;
+            }
 
             if mode == "custom"
                 && is_turn_end_custom_data(&data)
@@ -454,18 +511,20 @@ impl DaemonSession {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            let ns_slice: Vec<Value> = match &namespace {
+                Value::Array(a) => a.clone(),
+                _ => vec![],
+            };
+            if (self.early_drop_fn)(&ns_slice, &mode, &data) {
+                self.turn_event_stats.lock().await.filtered_early += 1;
+                continue;
+            }
+            self.turn_event_stats.lock().await.post_idle_drained += 1;
             out.push(TurnChunk {
                 namespace,
                 mode,
                 data,
             });
         }
-    }
-}
-
-impl DaemonSession {
-    /// Shared Arc constructor helper.
-    pub fn shared(ws_url: impl Into<String>, opts: Option<DaemonSessionOptions>) -> Arc<Self> {
-        Arc::new(Self::new(ws_url, opts))
     }
 }

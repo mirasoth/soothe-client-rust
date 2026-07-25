@@ -20,16 +20,16 @@ fmt: ## Format with rustfmt
 fmt-check: ## Check formatting
 	cargo fmt --check
 
-clippy: ## Clippy with -D warnings
-	cargo clippy --all-targets -- -D warnings
+clippy: ## Clippy with -D warnings (incl. image feature)
+	cargo clippy --all-targets --features image -- -D warnings
 
-test-unit: ## Unit tests (offline)
-	cargo test --lib --test unit_api
+test-unit: ## Unit tests (offline, includes image feature)
+	cargo test --lib --test unit_api --test appkit_unit --features image
 
 test: test-unit ## Alias for unit tests
 
 test-integration: ## Live integration tests (needs daemon)
-	SOOTHE_INTEGRATION=1 cargo test --test integration -- --nocapture
+	SOOTHE_INTEGRATION=1 cargo test --test integration --features image -- --nocapture --test-threads=1
 
 test-examples: ## Run examples 01–06 against live daemon
 	@for ex in 01_hello 02_stream_turn 03_text_completion 04_multi_turn 05_pool_service 06_jobs; do \
@@ -42,8 +42,7 @@ check: fmt-check clippy test-unit ## CI check without live daemon
 verify: check build ## Full offline verify
 
 build: ## Build release
-	cargo build --release
-
+	cargo build --release --features image
 doc: ## Build docs
 	cargo doc --no-deps
 

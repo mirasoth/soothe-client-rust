@@ -1,6 +1,6 @@
 [package]
 name = "soothe-client"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 authors = ["Mirasoth <hello@mirasoth.ai>"]
@@ -27,6 +27,14 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"
 tokio-tungstenite = { version = "0.26", features = ["connect"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4"] }
+# Optional: image compaction (enabled via the `image` feature).
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"], optional = true }
+base64 = { version = "0.22", optional = true }
+
+[features]
+default = []
+# Enable `appkit::attachments` image compaction (Catmull-Rom downscale + JPEG/PNG re-encode).
+image = ["dep:image", "dep:base64"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }

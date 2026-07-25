@@ -93,12 +93,16 @@ fn preferred_subagent_in_loop_input() {
             ..Default::default()
         }),
     );
+    let params = msg
+        .get("params")
+        .and_then(|v| v.as_object())
+        .expect("params");
     assert_eq!(
-        msg.get("preferred_subagent").and_then(|v| v.as_str()),
+        params.get("preferred_subagent").and_then(|v| v.as_str()),
         Some("deep_research")
     );
     assert_eq!(
-        msg.get("intent_hint").and_then(|v| v.as_str()),
+        params.get("intent_hint").and_then(|v| v.as_str()),
         Some(TEXT_COMPLETION)
     );
 }

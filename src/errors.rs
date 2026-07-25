@@ -148,6 +148,33 @@ impl StaleLoopError {
     }
 }
 
+/// Heartbeat tracking failure (daemon not alive within timeout).
+#[derive(Debug, Error)]
+#[error("{message} (state={state}, last_heartbeat={last_heartbeat:?})")]
+pub struct HeartbeatError {
+    /// Instant of last received heartbeat (None if no heartbeat ever received).
+    pub last_heartbeat: Option<std::time::Instant>,
+    /// Daemon state at the time of the failure.
+    pub state: String,
+    /// Human-readable error message.
+    pub message: String,
+}
+
+impl HeartbeatError {
+    /// Create a heartbeat error.
+    pub fn new(
+        last_heartbeat: Option<std::time::Instant>,
+        state: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            last_heartbeat,
+            state: state.into(),
+            message: message.into(),
+        }
+    }
+}
+
 /// Unified client error.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -166,6 +193,9 @@ pub enum Error {
     /// Stale loop after reattach.
     #[error(transparent)]
     StaleLoop(#[from] StaleLoopError),
+    /// Heartbeat failure (daemon not alive within timeout).
+    #[error(transparent)]
+    Heartbeat(#[from] HeartbeatError),
     /// Protocol / codec / transport failure.
     #[error("{0}")]
     Protocol(String),

@@ -1,7 +1,7 @@
 //! Protocol-1 WebSocket transport client with mux and delivery_ack.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,6 +15,9 @@ use crate::errors::{
     ConnectionError, DaemonError, DisconnectCause, Error, Result, StaleLoopError, TimeoutError,
 };
 use crate::heartbeat::HeartbeatTracker;
+use crate::inbound_priority::{
+    inbound_frame_drop_priority, DEFAULT_INBOUND_MAX_SIZE, DROP_PRIORITY_NORMAL,
+};
 use crate::protocol::{
     decode_message, expand_wire_messages, new_connection_init, new_notification, new_ping,
     new_pong, new_request, new_subscribe, new_unsubscribe, Envelope,
@@ -22,8 +25,6 @@ use crate::protocol::{
 use crate::stream_terminal::{
     extract_loop_id_from_inbound, inbound_needs_delivery_ack, stale_pending_frame_label,
 };
-
-const MAX_INBOUND: usize = 20_000;
 const DEFAULT_MAX_FRAME: usize = 10 * 1024 * 1024;
 
 /// Options for Client construction.
@@ -41,7 +42,7 @@ impl Default for ClientConfig {
     fn default() -> Self {
         Self {
             url: "ws://127.0.0.1:8765".into(),
-            max_inbound: MAX_INBOUND,
+            max_inbound: DEFAULT_INBOUND_MAX_SIZE,
             max_frame_size: DEFAULT_MAX_FRAME,
         }
     }
@@ -87,13 +88,15 @@ type StreamDegradedCallback = Arc<dyn Fn(u64, String) + Send + Sync>;
 
 struct Shared {
     url: String,
-    max_inbound: usize,
+    max_inbound: AtomicUsize,
     write_tx: Mutex<Option<mpsc::UnboundedSender<Message>>>,
     rpc_waiters: Mutex<HashMap<String, RpcWaiter>>,
     inbound: Mutex<VecDeque<Value>>,
     inbound_notify: Notify,
     connected: AtomicBool,
     reader_alive: AtomicBool,
+    handshake_complete: AtomicBool,
+    readiness_state: Mutex<String>,
     disconnect_cause: Mutex<Option<DisconnectCause>>,
     disconnect_notify: Notify,
     inbound_dropped: AtomicU64,
@@ -124,13 +127,15 @@ impl Client {
         Self {
             shared: Arc::new(Shared {
                 url: cfg.url,
-                max_inbound: cfg.max_inbound,
+                max_inbound: AtomicUsize::new(cfg.max_inbound),
                 write_tx: Mutex::new(None),
                 rpc_waiters: Mutex::new(HashMap::new()),
                 inbound: Mutex::new(VecDeque::new()),
                 inbound_notify: Notify::new(),
                 connected: AtomicBool::new(false),
                 reader_alive: AtomicBool::new(false),
+                handshake_complete: AtomicBool::new(false),
+                readiness_state: Mutex::new(String::new()),
                 disconnect_cause: Mutex::new(None),
                 disconnect_notify: Notify::new(),
                 inbound_dropped: AtomicU64::new(0),
@@ -157,6 +162,16 @@ impl Client {
     pub fn is_connection_alive(&self) -> bool {
         self.shared.reader_alive.load(Ordering::SeqCst)
             && self.shared.connected.load(Ordering::SeqCst)
+    }
+
+    /// Whether the protocol-1 handshake has completed.
+    pub fn is_handshake_complete(&self) -> bool {
+        self.shared.handshake_complete.load(Ordering::SeqCst)
+    }
+
+    /// Daemon `readiness_state` from the last `connection_ack` (empty before handshake).
+    pub async fn readiness_state(&self) -> String {
+        self.shared.readiness_state.lock().await.clone()
     }
 
     /// Count of dropped inbound frames under backpressure.
@@ -359,6 +374,12 @@ impl Client {
                     continue;
                 }
                 if state == "ready" || state.is_empty() {
+                    *self.shared.readiness_state.lock().await = if state.is_empty() {
+                        "ready".into()
+                    } else {
+                        state.into()
+                    };
+                    self.shared.handshake_complete.store(true, Ordering::SeqCst);
                     return Ok(msg);
                 }
                 return Err(Error::protocol(format!(
@@ -377,6 +398,10 @@ impl Client {
             let mut tx = self.shared.write_tx.lock().await;
             *tx = None;
         }
+        self.shared
+            .handshake_complete
+            .store(false, Ordering::SeqCst);
+        *self.shared.readiness_state.lock().await = String::new();
         self.shared.mark_disconnected(DisconnectCause::Clean).await;
         Ok(())
     }
@@ -392,6 +417,10 @@ impl Client {
         }
         self.shared.connected.store(false, Ordering::SeqCst);
         self.shared.reader_alive.store(false, Ordering::SeqCst);
+        self.shared
+            .handshake_complete
+            .store(false, Ordering::SeqCst);
+        *self.shared.readiness_state.lock().await = String::new();
         *self.shared.disconnect_cause.lock().await = None;
         self.shared.rpc_waiters.lock().await.clear();
         self.shared.inbound.lock().await.clear();
@@ -441,7 +470,8 @@ impl Client {
         }
     }
 
-    /// Legacy-shaped request map (`type` → method) like Go RequestResponse.
+    /// Request with a payload map that may include a `type` field as the method name
+    /// (Go `RequestResponse` parity).
     pub async fn request_response(
         &self,
         payload: Map<String, Value>,
@@ -536,6 +566,60 @@ impl Client {
         }
         *q = kept;
         labels
+    }
+
+    /// Re-queue an event ahead of subsequent [`Client::read_event`] calls.
+    ///
+    /// Applies priority-aware drop when the pending buffer is full
+    /// (Go `PushPendingEvent` parity).
+    pub async fn push_pending_event(&self, ev: Value) {
+        if !ev.is_object() {
+            return;
+        }
+        let mut q = self.shared.inbound.lock().await;
+        self.shared.enqueue_pending_locked(&mut q, ev);
+        self.shared.inbound_notify.notify_one();
+    }
+
+    /// Override the pending-event cap at runtime (Go `SetInboundMaxSize` parity).
+    pub fn set_inbound_max_size(&self, n: usize) {
+        if n > 0 {
+            self.shared.max_inbound.store(n, Ordering::SeqCst);
+        }
+    }
+
+    /// Spawn a background reader that streams inbound frames on a channel.
+    ///
+    /// The channel closes when the connection ends or the client disconnects.
+    /// Solicited frames (RPC responses / subscription confirmations) are still
+    /// routed through the internal mux and are NOT forwarded on this channel;
+    /// only unsolicited app events are forwarded (Go `ReceiveMessages` parity).
+    ///
+    /// Heartbeat, ping/pong, and delivery-ack handling are still performed by
+    /// the internal reader task; this method exposes the already-routed inbound
+    /// queue as a channel for consumers that prefer pull-style streaming.
+    pub fn receive_messages(&self, buffer: usize) -> mpsc::Receiver<Value> {
+        let (tx, rx) = mpsc::channel(if buffer == 0 { 100 } else { buffer });
+        let shared = self.shared.clone();
+        tokio::spawn(async move {
+            loop {
+                let ev = {
+                    let mut q = shared.inbound.lock().await;
+                    q.pop_front()
+                };
+                if let Some(ev) = ev {
+                    if tx.send(ev).await.is_err() {
+                        return;
+                    }
+                    continue;
+                }
+                if !shared.is_connection_alive() {
+                    return;
+                }
+                shared.inbound_notify.notified().await;
+            }
+        });
+        rx
     }
 
     /// Notify `loop_input`.
@@ -1013,9 +1097,165 @@ impl Client {
             Err(e) => Err(StaleLoopError::new(loop_id, Some(Box::new(e))).into()),
         }
     }
+
+    // ----- Structured command shorthands (Go `CommandRequest` parity) -----
+
+    /// `command_request` RPC (structured slash command).
+    ///
+    /// Mirrors Go `CommandRequest`. Default timeout 30s.
+    pub async fn command_request(
+        &self,
+        command: &str,
+        loop_id: Option<&str>,
+        params: Option<Map<String, Value>>,
+    ) -> Result<Map<String, Value>> {
+        let mut p = Map::new();
+        p.insert("command".into(), json!(command));
+        if let Some(lid) = loop_id {
+            p.insert("loop_id".into(), json!(lid));
+        }
+        if let Some(extra) = params {
+            p.insert("params".into(), Value::Object(extra));
+        }
+        self.request("command_request", p, Duration::from_secs(30))
+            .await
+    }
+
+    /// `/clear` — clear loop conversation history.
+    pub async fn command_clear(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("clear", Some(loop_id), None).await
+    }
+
+    /// `/exit` — stop the loop and mark for exit.
+    pub async fn command_exit(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("exit", Some(loop_id), None).await
+    }
+
+    /// `/quit` — alias for `/exit`.
+    pub async fn command_quit(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("quit", Some(loop_id), None).await
+    }
+
+    /// `/detach` — mark the loop as detached (continues running server-side).
+    pub async fn command_detach(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("detach", Some(loop_id), None).await
+    }
+
+    /// `/cancel` — cancel the running query.
+    pub async fn command_cancel(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("cancel", Some(loop_id), None).await
+    }
+
+    /// `/memory` — query memory stats.
+    pub async fn command_memory(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("memory", Some(loop_id), None).await
+    }
+
+    /// `/policy` — query the active policy profile.
+    pub async fn command_policy(&self) -> Result<Map<String, Value>> {
+        self.command_request("policy", None, None).await
+    }
+
+    /// `/history` — query input history.
+    pub async fn command_history(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("history", Some(loop_id), None).await
+    }
+
+    /// `/config` — query daemon configuration.
+    pub async fn command_config(&self) -> Result<Map<String, Value>> {
+        self.command_request("config", None, None).await
+    }
+
+    /// `/review` — query conversation review.
+    pub async fn command_review(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("review", Some(loop_id), None).await
+    }
+
+    /// `/plan` — query current plan.
+    pub async fn command_plan(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("plan", Some(loop_id), None).await
+    }
+
+    /// `/autopilot_dashboard` — show autopilot dashboard.
+    pub async fn command_autopilot_dashboard(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        self.command_request("autopilot_dashboard", Some(loop_id), None)
+            .await
+    }
+
+    // ----- Daemon readiness -----
+
+    /// Wait for the protocol-1 `connection_ack` handshake to report `readiness_state == "ready"`.
+    ///
+    /// Returns immediately when the handshake already completed during [`Client::connect`];
+    /// otherwise polls inbound frames for an out-of-band `connection_ack`.
+    /// Default timeout 10s (Go `WaitForDaemonReady` parity).
+    pub async fn wait_for_daemon_ready(&self, timeout: Duration) -> Result<Map<String, Value>> {
+        let timeout = if timeout.is_zero() {
+            Duration::from_secs(10)
+        } else {
+            timeout
+        };
+        // Handshake already completed during `connect` — do not drain inbound
+        // looking for a second `connection_ack` (that stalls and drops events).
+        if self.is_handshake_complete() {
+            let state = self.readiness_state().await;
+            if state.is_empty() || state == "ready" {
+                let mut m = Map::new();
+                m.insert("readiness_state".into(), json!("ready"));
+                return Ok(m);
+            }
+            return Err(Error::protocol(format!(
+                "daemon not ready: readiness_state={state}"
+            )));
+        }
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(TimeoutError::new("connection_ack", format!("{timeout:?}")).into());
+            }
+            let msg = self
+                .read_event_with_timeout(remaining.min(Duration::from_secs(2)))
+                .await?;
+            let Some(msg) = msg else {
+                continue;
+            };
+            let msg_type = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            if msg_type != "connection_ack" {
+                continue;
+            }
+            let state = msg
+                .get("result")
+                .and_then(|r| r.get("readiness_state"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if state == "ready" {
+                return Ok(map_from_value(msg));
+            }
+            return Err(Error::protocol(format!(
+                "daemon not ready: readiness_state={state}"
+            )));
+        }
+    }
+}
+
+/// Convert a `Value` (expected Object) into a `Map<String, Value>`.
+fn map_from_value(v: Value) -> Map<String, Value> {
+    match v {
+        Value::Object(m) => m,
+        other => {
+            let mut m = Map::new();
+            m.insert("result".into(), other);
+            m
+        }
+    }
 }
 
 impl Shared {
+    fn is_connection_alive(&self) -> bool {
+        self.reader_alive.load(Ordering::SeqCst) && self.connected.load(Ordering::SeqCst)
+    }
+
     async fn send_raw(&self, msg: Message) -> Result<()> {
         let tx = self.write_tx.lock().await;
         let Some(tx) = tx.as_ref() else {
@@ -1124,24 +1364,48 @@ impl Shared {
         }
 
         // Push to inbound queue with priority backpressure.
-        let critical = is_critical_inbound(&msg);
-        let mut q = self.inbound.lock().await;
-        if q.len() >= self.max_inbound {
-            if critical {
-                if let Some(pos) = q.iter().position(|m| !is_critical_inbound(m)) {
-                    q.remove(pos);
-                    self.note_inbound_drop("priority_evict");
-                } else {
-                    self.note_inbound_drop("queue_full_critical");
-                    return;
-                }
-            } else {
-                self.note_inbound_drop("queue_full");
+        {
+            let mut q = self.inbound.lock().await;
+            self.enqueue_pending_locked(&mut q, msg);
+        }
+        self.inbound_notify.notify_one();
+    }
+
+    fn enqueue_pending_locked(&self, q: &mut VecDeque<Value>, ev: Value) {
+        let max = self.max_inbound.load(Ordering::SeqCst);
+        if q.len() < max {
+            q.push_back(ev);
+            return;
+        }
+        // Priority-aware drop: remove highest-priority-number (NORMAL) frame if possible.
+        let mut drop_idx = None;
+        let mut drop_pri = -1;
+        for (i, item) in q.iter().enumerate() {
+            let p = inbound_frame_drop_priority(item.as_object());
+            if p > drop_pri {
+                drop_pri = p;
+                drop_idx = Some(i);
+            }
+        }
+        let incoming_pri = inbound_frame_drop_priority(ev.as_object());
+        if let Some(idx) = drop_idx {
+            if drop_pri >= DROP_PRIORITY_NORMAL {
+                q.remove(idx);
+                q.push_back(ev);
+                self.note_inbound_drop("priority_evict");
                 return;
             }
         }
-        q.push_back(msg);
-        self.inbound_notify.notify_one();
+        if incoming_pri >= DROP_PRIORITY_NORMAL {
+            self.note_inbound_drop("queue_full");
+            return;
+        }
+        // Incoming is CRITICAL/HIGH: force-drop oldest to admit it.
+        if !q.is_empty() {
+            q.pop_front();
+            self.note_inbound_drop("priority_evict");
+        }
+        q.push_back(ev);
     }
 
     fn note_inbound_drop(&self, reason: &str) {
@@ -1152,14 +1416,6 @@ impl Shared {
             }
         }
     }
-}
-
-fn is_critical_inbound(msg: &Value) -> bool {
-    let t = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
-    matches!(
-        t,
-        "status" | "error" | "complete" | "connection_ack" | "response"
-    ) || inbound_needs_delivery_ack(msg)
 }
 
 fn parse_daemon_error(msg: &Value) -> DaemonError {

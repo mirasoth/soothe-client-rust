@@ -23,6 +23,21 @@ pub struct TurnLifecycleGate {
 }
 
 impl TurnLifecycleGate {
+    /// Update gate flags from one decoded inbound message (status or event frame).
+    pub fn observe(&mut self, msg: &Value) {
+        if msg.get("type").and_then(|v| v.as_str()) == Some("status") {
+            if let Some(state) = msg.get("state").and_then(|v| v.as_str()) {
+                self.observe_status(state);
+            }
+            return;
+        }
+        if msg.get("type").and_then(|v| v.as_str()) == Some("event") || msg.get("mode").is_some() {
+            let mode = msg.get("mode").and_then(|v| v.as_str()).unwrap_or("");
+            let data = msg.get("data").cloned().unwrap_or(Value::Null);
+            self.observe_event(mode, &data);
+        }
+    }
+
     /// Observe a status frame.
     pub fn observe_status(&mut self, state: &str) {
         if state.eq_ignore_ascii_case("running") {
