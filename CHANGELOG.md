@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-07-26
+
+### Changed
+- **`TurnRunner`:** takes `Arc<QueryGate>` so the gate can be shared with the caller for
+  pre-acquire + [`execute_reserved`] (Go `soothe-client-go` / `ExecuteReserved` parity)
+- **`execute_reserved`:** always `release`s the gate on exit (including `validate_opts` failure)
+
+### Added
+- `TurnRunner::gate()` accessor for the shared `Arc<QueryGate>`
+
 ## 0.3.0 — 2026-07-25
 
 ### Added

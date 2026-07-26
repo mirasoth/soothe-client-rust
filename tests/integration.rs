@@ -471,7 +471,7 @@ async fn integration_pool_turn_runner() {
         let pool = std::sync::Arc::new(ConnectionPool::new(&url, store.clone(), None));
         let runner = TurnRunner::new(
             pool.clone(),
-            QueryGate::new(),
+            std::sync::Arc::new(QueryGate::new()),
             EventClassifier::with_defaults(),
             store,
             Some(TurnConfig {

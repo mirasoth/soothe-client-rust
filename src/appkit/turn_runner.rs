@@ -90,7 +90,7 @@ type InputBuilderFn =
 /// Executes a turn against a pooled connection.
 pub struct TurnRunner<S: SessionStore> {
     pool: Arc<ConnectionPool<S>>,
-    gate: QueryGate,
+    gate: Arc<QueryGate>,
     classifier: EventClassifier,
     store: Arc<S>,
     broadcaster: Option<Arc<SseBroadcaster>>,
@@ -103,9 +103,12 @@ pub struct TurnRunner<S: SessionStore> {
 
 impl<S: SessionStore + 'static> TurnRunner<S> {
     /// Create a runner. `cfg` defaults when `None`.
+    ///
+    /// `gate` is shared (`Arc`) so callers can [`QueryGate::acquire`] before
+    /// spawning work and then call [`Self::execute_reserved`] (Go appkit parity).
     pub fn new(
         pool: Arc<ConnectionPool<S>>,
-        gate: QueryGate,
+        gate: Arc<QueryGate>,
         classifier: EventClassifier,
         store: Arc<S>,
         cfg: Option<TurnConfig>,
@@ -122,6 +125,11 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
             error_data: None,
             input_builder: None,
         }
+    }
+
+    /// Shared query gate (same instance used by [`Self::execute`] / [`Self::execute_reserved`]).
+    pub fn gate(&self) -> &Arc<QueryGate> {
+        &self.gate
     }
 
     /// Attach an SSE broadcaster for delta / thinking / complete / error fan-out.
@@ -189,6 +197,9 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
     }
 
     /// Run a turn when the caller already reserved the gate via [`QueryGate::acquire`].
+    ///
+    /// Releases the gate on all exit paths (including `validate_opts` failure), matching
+    /// Go `ExecuteReserved`.
     pub async fn execute_reserved(
         &self,
         session_id: &str,
@@ -203,23 +214,29 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
                 "appkit: ExecuteReserved requires an active QueryGate reservation for {session_id}"
             )));
         }
-        self.validate_opts(opts.as_ref())?;
+        if let Err(e) = self.validate_opts(opts.as_ref()) {
+            self.gate.release(session_id);
+            return Err(e);
+        }
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancelled.clone();
         let cancel_fn: CancelFn = Arc::new(move || {
             cancel_flag.store(true, Ordering::SeqCst);
         });
         self.gate.replace_cancel(session_id, cancel_fn);
-        self.run_turn(
-            session_id,
-            message,
-            user_id,
-            workspace_id,
-            attachments,
-            opts,
-            cancelled,
-        )
-        .await
+        let result = self
+            .run_turn(
+                session_id,
+                message,
+                user_id,
+                workspace_id,
+                attachments,
+                opts,
+                cancelled,
+            )
+            .await;
+        self.gate.release(session_id);
+        result
     }
 
     fn validate_opts(&self, opts: Option<&InputOpts>) -> Result<()> {

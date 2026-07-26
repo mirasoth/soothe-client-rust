@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
     let runner = TurnRunner::new(
         pool.clone(),
-        QueryGate::new(),
+        Arc::new(QueryGate::new()),
         EventClassifier::with_defaults(),
         store,
         None,
