@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 — 2026-07-26
+
+### Fixed
+- **`TurnRunner` idle clock:** arm only after the turn is accepted (or first non-stale
+  event), so pre-accept LLM latency is not counted as silence
+- **Idle postponement:** heartbeats / empty catalog events no longer reset the idle
+  clock (StrangeLoop planner churn could hold `QueryGate` indefinitely)
+- **`SoftComplete`:** always completes (including empty content) so idle/query timeouts
+  release the gate; callers map `completion_event` → chat.done codes
+
 ## 0.3.1 — 2026-07-26
 
 ### Changed

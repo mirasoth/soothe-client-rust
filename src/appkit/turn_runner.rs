@@ -371,7 +371,10 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
                     )
                     .await;
             }
-            if !idle_for_turn.is_zero() && last_event.elapsed() > idle_for_turn {
+            // Idle silence is only meaningful after the turn is armed (first
+            // non-stale event). Counting from query send treats LLM first-token
+            // latency as "idle" and SoftCompletes empty replies under load.
+            if armed && !idle_for_turn.is_zero() && last_event.elapsed() > idle_for_turn {
                 let _ = conn.client.command_cancel(&loop_id).await;
                 break self
                     .finish_timeout(
@@ -385,7 +388,7 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
                     .await;
             }
 
-            let wait = if idle_for_turn.is_zero() {
+            let wait = if !armed || idle_for_turn.is_zero() {
                 Duration::from_millis(500)
             } else {
                 idle_for_turn
@@ -427,17 +430,23 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
                 }
                 continue;
             };
-            last_event = Instant::now();
 
             if !armed {
                 if is_stale_turn_end_event(&ev) {
+                    // Keepalive / prior-turn idle — do not arm or start idle clock.
                     continue;
                 }
                 if is_status_running_event(&ev) {
                     let _ = feed_boundary(&mut boundary, &ev);
+                    // Daemon accepted the turn — arm idle from here so pre-accept
+                    // wait does not burn the silence budget, but post-accept hangs
+                    // still SoftComplete / Fail via idle_timeout.
+                    armed = true;
+                    last_event = Instant::now();
                     continue;
                 }
                 armed = true;
+                last_event = Instant::now();
             }
 
             let ended = feed_boundary(&mut boundary, &ev);
@@ -447,6 +456,12 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
             }
 
             let event_result = self.classifier.classify(&ev, &collected);
+            // Heartbeats / empty catalog events must not postpone idle_timeout —
+            // otherwise StrangeLoop planner churn holds the single-flight gate forever.
+            if advances_idle_clock(&event_result) {
+                last_event = Instant::now();
+            }
+
             if event_result.terminal == ChatEventTerminal::FailedComplete {
                 let err = Error::msg(
                     event_result
@@ -524,7 +539,9 @@ impl<S: SessionStore + 'static> TurnRunner<S> {
         policy: TimeoutPolicy,
     ) -> Result<String> {
         match policy {
-            TimeoutPolicy::SoftComplete if !content.trim().is_empty() => {
+            // Soft-complete even with empty content so idle/query timeouts always
+            // release the QueryGate (callers map completion_event → chat.done codes).
+            TimeoutPolicy::SoftComplete => {
                 self.complete_turn(session_id, loop_id, content, started_at, completion_event)
                     .await
             }
@@ -648,6 +665,21 @@ fn idle_timeout_for_turn(cfg: &TurnConfig, has_attachments: bool) -> Duration {
         return cfg.min_idle_timeout_with_attachments;
     }
     idle
+}
+
+/// Events that should postpone idle_timeout (assistant progress / turn end).
+fn advances_idle_clock(result: &super::classifier::ChatEventResult) -> bool {
+    use super::classifier::ChatEventTerminal;
+    if !result.content.trim().is_empty() {
+        return true;
+    }
+    if !result.thinking_step.trim().is_empty() {
+        return true;
+    }
+    matches!(
+        result.terminal,
+        ChatEventTerminal::DeliverableComplete | ChatEventTerminal::FailedComplete
+    )
 }
 
 /// Drain pooled event channel. When `settle > 0`, keep reading until quiet for `settle`.
