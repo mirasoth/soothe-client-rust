@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Display card wire types renamed to `soothe.card.*` (`created` / `updated` / `finalized` / `replay.begin` / `replay.end`)
+
+### Added
+- `card_projection::{CardProjection, parse_card_custom_payload}`
+- `EVENT_CARD_UPDATED` / `EVENT_CARD_FINALIZED`; card frames count as turn progress
+
 ## 0.3.2 — 2026-07-26
 
 ### Fixed

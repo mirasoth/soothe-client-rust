@@ -2,6 +2,10 @@
 
 use serde_json::Value;
 
+use crate::events::{
+    EVENT_CARD_CREATED, EVENT_CARD_FINALIZED, EVENT_CARD_REPLAY_BEGIN, EVENT_CARD_REPLAY_END,
+    EVENT_CARD_UPDATED,
+};
 use crate::protocol::as_str;
 
 /// Daemon turn-scoped stream end custom type.
@@ -12,9 +16,6 @@ const PLAN_CREATED: &str = "soothe.cognition.plan.created";
 const STEP_STARTED: &str = "soothe.cognition.strange_loop.step.started";
 const STEP_QUEUED: &str = "soothe.cognition.strange_loop.step.queued";
 const STEP_COMPLETED: &str = "soothe.cognition.strange_loop.step.completed";
-const CARD_REPLAY_BEGIN: &str = "soothe.card.replay.begin";
-const CARD_REPLAY_END: &str = "soothe.card.replay.end";
-const CARD_CREATED: &str = "soothe.card.created";
 
 fn is_turn_end_type(t: &str) -> bool {
     t == STREAM_END || t == STRANGE_LOOP_COMPLETED
@@ -23,14 +24,24 @@ fn is_turn_end_type(t: &str) -> bool {
 fn is_turn_progress_type(t: &str) -> bool {
     matches!(
         t,
-        PLAN_CREATED | STEP_STARTED | STEP_QUEUED | STEP_COMPLETED
+        PLAN_CREATED
+            | STEP_STARTED
+            | STEP_QUEUED
+            | STEP_COMPLETED
+            | EVENT_CARD_CREATED
+            | EVENT_CARD_UPDATED
+            | EVENT_CARD_FINALIZED
     ) || t.starts_with("soothe.cognition.strange_loop.step")
 }
 
 fn is_stale_pending_type(t: &str) -> bool {
     matches!(
         t,
-        "connection_ack" | "complete" | CARD_REPLAY_BEGIN | CARD_REPLAY_END | CARD_CREATED
+        "connection_ack"
+            | "complete"
+            | EVENT_CARD_REPLAY_BEGIN
+            | EVENT_CARD_REPLAY_END
+            | EVENT_CARD_CREATED
     )
 }
 

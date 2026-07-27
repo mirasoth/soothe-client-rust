@@ -57,12 +57,16 @@ pub const EVENT_REPLAY_COMPLETE: &str = "replay_complete";
 /// Loop reattached control-plane frame.
 pub const EVENT_LOOP_REATTACHED_WIRE: &str = "loop_reattached";
 
-/// Card replay begin.
-pub const EVENT_CARD_REPLAY_BEGIN: &str = "card.replay_begin";
 /// Card created.
-pub const EVENT_CARD_CREATED: &str = "card.created";
+pub const EVENT_CARD_CREATED: &str = "soothe.card.created";
+/// Card updated.
+pub const EVENT_CARD_UPDATED: &str = "soothe.card.updated";
+/// Card finalized.
+pub const EVENT_CARD_FINALIZED: &str = "soothe.card.finalized";
+/// Card replay begin.
+pub const EVENT_CARD_REPLAY_BEGIN: &str = "soothe.card.replay.begin";
 /// Card replay end.
-pub const EVENT_CARD_REPLAY_END: &str = "card.replay_end";
+pub const EVENT_CARD_REPLAY_END: &str = "soothe.card.replay.end";
 
 /// Tool started.
 pub const EVENT_TOOL_STARTED: &str = "soothe.tool.execution.started";
