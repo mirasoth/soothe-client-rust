@@ -714,14 +714,6 @@ impl Client {
             .await
     }
 
-    /// `loop_cards_fetch`.
-    pub async fn loop_cards_fetch(&self, loop_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        self.request("loop_cards_fetch", params, Duration::from_secs(30))
-            .await
-    }
-
     /// `loop_history_fetch`.
     pub async fn loop_history_fetch(&self, loop_id: &str) -> Result<Map<String, Value>> {
         let mut params = Map::new();

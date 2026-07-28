@@ -262,12 +262,6 @@ impl DaemonSession {
         self.rpc_client.loop_list(lim).await
     }
 
-    /// Fetch cards via RPC sidecar.
-    pub async fn fetch_loop_cards(&self, loop_id: &str) -> Result<Map<String, Value>> {
-        self.ensure_rpc_connected().await?;
-        self.rpc_client.loop_cards_fetch(loop_id).await
-    }
-
     /// Fetch history via RPC sidecar.
     pub async fn fetch_loop_history(&self, loop_id: &str) -> Result<Map<String, Value>> {
         self.ensure_rpc_connected().await?;

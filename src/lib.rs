@@ -61,7 +61,7 @@ pub use events::{
 };
 pub use heartbeat::{DaemonHealth, HeartbeatTracker};
 pub use helpers::{
-    check_daemon_status, fetch_config_section, fetch_loop_cards, fetch_loop_history,
+    check_daemon_status, fetch_config_section, fetch_loop_history,
     fetch_skills_catalog, is_daemon_live, protocol1_rpc, request_auth, request_auth_refresh,
     request_daemon_config_reload, request_daemon_shutdown, websocket_url_from_env,
 };

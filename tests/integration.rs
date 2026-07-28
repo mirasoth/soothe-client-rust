@@ -112,10 +112,6 @@ async fn integration_loop_tree_cards_history_messages_state() {
             Ok(v) => eprintln!("loop_tree ok: keys={:?}", v.keys().collect::<Vec<_>>()),
             Err(e) => eprintln!("loop_tree soft-fail: {e}"),
         }
-        match client.loop_cards_fetch(&loop_id).await {
-            Ok(v) => eprintln!("loop_cards ok: {v:?}"),
-            Err(e) => eprintln!("loop_cards soft-fail: {e}"),
-        }
         match client.loop_history_fetch(&loop_id).await {
             Ok(v) => eprintln!("loop_history ok: {v:?}"),
             Err(e) => eprintln!("loop_history soft-fail: {e}"),
@@ -452,10 +448,6 @@ async fn integration_send_methods_smoke() {
             .send_loop_state_get(&loop_id, &[&rid])
             .await
             .expect("send_loop_state_get");
-        client
-            .send_loop_cards_fetch(&loop_id, &[&rid])
-            .await
-            .expect("send_loop_cards_fetch");
         client.close().await.ok();
     })
     .await;

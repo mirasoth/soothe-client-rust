@@ -322,15 +322,6 @@ impl Client {
             .await
     }
 
-    /// Send `loop_cards_fetch` request envelope (Go `SendLoopCardsFetch` parity).
-    pub async fn send_loop_cards_fetch(&self, loop_id: &str, request_id: &[&str]) -> Result<()> {
-        let rid = opt_request_id(request_id);
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        self.send_envelope(new_request_with_id("loop_cards_fetch", params, rid))
-            .await
-    }
-
     /// Send `loop_history_fetch` request envelope (Go `SendLoopHistoryFetch` parity).
     pub async fn send_loop_history_fetch(&self, loop_id: &str, request_id: &[&str]) -> Result<()> {
         let rid = opt_request_id(request_id);

@@ -144,11 +144,6 @@ pub async fn fetch_loop_history(client: &Client, loop_id: &str) -> Result<Map<St
     client.loop_history_fetch(loop_id).await
 }
 
-/// Fetch loop cards.
-pub async fn fetch_loop_cards(client: &Client, loop_id: &str) -> Result<Map<String, Value>> {
-    client.loop_cards_fetch(loop_id).await
-}
-
 /// Submit access_key/secret_key credentials via RPC.
 pub async fn request_auth(
     client: &Client,
