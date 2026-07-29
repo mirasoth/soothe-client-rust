@@ -16,7 +16,7 @@ use crate::errors::{Error, Result};
 use crate::protocol::new_notification;
 use crate::session::{bootstrap_loop_session, BootstrapOptions};
 
-use super::session_store::{SessionRecord, SessionStore};
+use super::loop_session_store::{LoopSessionEntry, LoopSessionStore};
 
 /// Returned when no idle pool slot is immediately available.
 #[derive(Debug, Clone, thiserror::Error)]
@@ -116,7 +116,7 @@ struct PoolState {
 }
 
 /// Manages daemon connections, one active slot per session id.
-pub struct ConnectionPool<S: SessionStore> {
+pub struct ConnectionPool<S: LoopSessionStore> {
     daemon_url: String,
     store: Arc<S>,
     cfg: PoolConfig,
@@ -125,7 +125,7 @@ pub struct ConnectionPool<S: SessionStore> {
     state: Mutex<PoolState>,
 }
 
-impl<S: SessionStore + 'static> ConnectionPool<S> {
+impl<S: LoopSessionStore + 'static> ConnectionPool<S> {
     /// Construct a pool for `daemon_url`. `cfg` defaults via [`PoolConfig::default`].
     pub fn new(daemon_url: impl Into<String>, store: Arc<S>, cfg: Option<PoolConfig>) -> Self {
         let cfg = cfg.unwrap_or_default();
@@ -424,7 +424,7 @@ impl<S: SessionStore + 'static> ConnectionPool<S> {
     ) -> Result<()> {
         if self.store.get_session(session_id).await.is_none() {
             self.store
-                .create_session(SessionRecord {
+                .create_session(LoopSessionEntry {
                     session_id: session_id.to_string(),
                     workspace_id: workspace_id.to_string(),
                     user_id: user_id.to_string(),

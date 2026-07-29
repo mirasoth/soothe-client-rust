@@ -8,7 +8,7 @@ use serde_json::{json, Map};
 use soothe_client::appkit::{
     compact_attachments, default_thinking_step_events, extract_thinking_step,
     should_drop_stream_chunk_early, CancelFn, ChatEventTerminal, ClassifierConfig, EventClassifier,
-    InMemorySessionStore, QueryGate, SendCancelFn, SessionRecord, SessionStore, SseBroadcaster,
+    InMemoryLoopSessionStore, QueryGate, SendCancelFn, LoopSessionEntry, LoopSessionStore, SseBroadcaster,
     SseEvent, TurnBoundary, TURN_END_IDLE, TURN_END_STREAM_END,
 };
 #[cfg(feature = "image")]
@@ -209,15 +209,15 @@ fn turn_boundary_stream_end_and_idle() {
 }
 
 #[test]
-fn session_store_roundtrip() {
+fn loop_session_store_roundtrip() {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
     rt.block_on(async {
-        let store = InMemorySessionStore::new();
+        let store = InMemoryLoopSessionStore::new();
         store
-            .create_session(SessionRecord {
+            .create_session(LoopSessionEntry {
                 session_id: "s1".into(),
                 loop_id: Some("loop-1".into()),
                 workspace_id: "ws".into(),

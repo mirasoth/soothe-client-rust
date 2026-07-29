@@ -9,7 +9,7 @@ mod common;
 use std::sync::Arc;
 
 use soothe_client::appkit::{
-    ConnectionPool, EventClassifier, InMemorySessionStore, InputOpts, QueryGate, TurnRunner,
+    ConnectionPool, EventClassifier, InMemoryLoopSessionStore, InputOpts, QueryGate, TurnRunner,
 };
 use soothe_client::TEXT_COMPLETION;
 use tempfile::tempdir;
@@ -18,7 +18,7 @@ use tempfile::tempdir;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
     let workspace = dir.path().display().to_string();
-    let store = Arc::new(InMemorySessionStore::new());
+    let store = Arc::new(InMemoryLoopSessionStore::new());
     let pool = Arc::new(ConnectionPool::new(
         common::daemon_url(),
         store.clone(),

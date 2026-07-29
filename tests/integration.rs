@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use serde_json::{json, Map};
 use soothe_client::appkit::{
-    ConnectionPool, DaemonSession, DaemonSessionOptions, EventClassifier, InMemorySessionStore,
+    ConnectionPool, DaemonSession, DaemonSessionOptions, EventClassifier, InMemoryLoopSessionStore,
     InputOpts, QueryGate, SendTurnOptions, TimeoutPolicy, TurnConfig, TurnRunner,
 };
 use soothe_client::helpers::fetch_config_section;
@@ -459,7 +459,7 @@ async fn integration_pool_turn_runner() {
         let url = skip_if_no_daemon!();
         let dir = common::temp_workspace();
         let workspace = dir.path().display().to_string();
-        let store = std::sync::Arc::new(InMemorySessionStore::new());
+        let store = std::sync::Arc::new(InMemoryLoopSessionStore::new());
         let pool = std::sync::Arc::new(ConnectionPool::new(&url, store.clone(), None));
         let runner = TurnRunner::new(
             pool.clone(),

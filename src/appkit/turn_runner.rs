@@ -17,7 +17,7 @@ use super::broadcaster::{SseBroadcaster, SseEvent};
 use super::classifier::{ChatEventTerminal, EventClassifier};
 use super::pool::ConnectionPool;
 use super::query_gate::{CancelFn, QueryGate, SendCancelFn};
-use super::session_store::SessionStore;
+use super::loop_session_store::LoopSessionStore;
 use super::turn_boundary::{is_daemon_turn_end_event, TurnBoundary};
 
 /// Timeout policy for idle / query / stream-close.
@@ -88,7 +88,7 @@ type InputBuilderFn =
     Arc<dyn Fn(&str, &str, Option<&Value>, Option<&InputOpts>) -> Map<String, Value> + Send + Sync>;
 
 /// Executes a turn against a pooled connection.
-pub struct TurnRunner<S: SessionStore> {
+pub struct TurnRunner<S: LoopSessionStore> {
     pool: Arc<ConnectionPool<S>>,
     gate: Arc<QueryGate>,
     classifier: EventClassifier,
@@ -101,7 +101,7 @@ pub struct TurnRunner<S: SessionStore> {
     input_builder: Option<InputBuilderFn>,
 }
 
-impl<S: SessionStore + 'static> TurnRunner<S> {
+impl<S: LoopSessionStore + 'static> TurnRunner<S> {
     /// Create a runner. `cfg` defaults when `None`.
     ///
     /// `gate` is shared (`Arc`) so callers can [`QueryGate::acquire`] before
