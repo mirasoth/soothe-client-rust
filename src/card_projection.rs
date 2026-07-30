@@ -112,12 +112,7 @@ impl CardProjection {
     pub fn snapshot(&self) -> Vec<Map<String, Value>> {
         self.order
             .iter()
-            .filter_map(|id| {
-                self.cards
-                    .get(id)
-                    .and_then(|v| v.as_object())
-                    .map(|m| m.clone())
-            })
+            .filter_map(|id| self.cards.get(id).and_then(|v| v.as_object()).cloned())
             .collect()
     }
 

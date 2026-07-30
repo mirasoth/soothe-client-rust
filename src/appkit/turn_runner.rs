@@ -15,9 +15,9 @@ use crate::stream_terminal::is_turn_end_custom_data;
 use super::attachments::{compact_attachments, CompactImageOptions};
 use super::broadcaster::{SseBroadcaster, SseEvent};
 use super::classifier::{ChatEventTerminal, EventClassifier};
+use super::loop_session_store::LoopSessionStore;
 use super::pool::ConnectionPool;
 use super::query_gate::{CancelFn, QueryGate, SendCancelFn};
-use super::loop_session_store::LoopSessionStore;
 use super::turn_boundary::{is_daemon_turn_end_event, TurnBoundary};
 
 /// Timeout policy for idle / query / stream-close.

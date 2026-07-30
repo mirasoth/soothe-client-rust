@@ -8,8 +8,8 @@ use serde_json::{json, Map};
 use soothe_client::appkit::{
     compact_attachments, default_thinking_step_events, extract_thinking_step,
     should_drop_stream_chunk_early, CancelFn, ChatEventTerminal, ClassifierConfig, EventClassifier,
-    InMemoryLoopSessionStore, QueryGate, SendCancelFn, LoopSessionEntry, LoopSessionStore, SseBroadcaster,
-    SseEvent, TurnBoundary, TURN_END_IDLE, TURN_END_STREAM_END,
+    InMemoryLoopSessionStore, LoopSessionEntry, LoopSessionStore, QueryGate, SendCancelFn,
+    SseBroadcaster, SseEvent, TurnBoundary, TURN_END_IDLE, TURN_END_STREAM_END,
 };
 #[cfg(feature = "image")]
 use soothe_client::appkit::{compact_image_attachment, CompactImageOptions};

@@ -45,8 +45,8 @@ pub use events::{
     EVENT_AUTOPILOT_GOAL_BLOCKED, EVENT_AUTOPILOT_GOAL_COMPLETED, EVENT_AUTOPILOT_GOAL_CREATED,
     EVENT_AUTOPILOT_GOAL_PROGRESS, EVENT_AUTOPILOT_GOAL_SUSPENDED, EVENT_AUTOPILOT_STATUS_CHANGED,
     EVENT_BRANCH_CREATED, EVENT_BRANCH_RETRY_STARTED, EVENT_CARD_CREATED, EVENT_CARD_FINALIZED,
-    EVENT_CARD_REPLAY_BEGIN, EVENT_CARD_REPLAY_END, EVENT_CARD_UPDATED, EVENT_DEEP_RESEARCH_COMPLETED,
-    EVENT_DEEP_RESEARCH_CRAWL_SUMMARY,
+    EVENT_CARD_REPLAY_BEGIN, EVENT_CARD_REPLAY_END, EVENT_CARD_UPDATED,
+    EVENT_DEEP_RESEARCH_COMPLETED, EVENT_DEEP_RESEARCH_CRAWL_SUMMARY,
     EVENT_DEEP_RESEARCH_GATHER_SUMMARY, EVENT_DEEP_RESEARCH_PROGRESS, EVENT_DEEP_RESEARCH_STARTED,
     EVENT_DEEP_RESEARCH_STEP_COMPLETED, EVENT_FINAL_REPORT, EVENT_GENERAL_FAILED,
     EVENT_GOAL_BATCH_STARTED, EVENT_GOAL_COMPLETED, EVENT_GOAL_CREATED, EVENT_GOAL_DEFERRED,
@@ -61,8 +61,8 @@ pub use events::{
 };
 pub use heartbeat::{DaemonHealth, HeartbeatTracker};
 pub use helpers::{
-    check_daemon_status, fetch_config_section, fetch_loop_history,
-    fetch_skills_catalog, is_daemon_live, protocol1_rpc, request_auth, request_auth_refresh,
+    check_daemon_status, fetch_config_section, fetch_loop_history, fetch_skills_catalog,
+    is_daemon_live, protocol1_rpc, request_auth, request_auth_refresh,
     request_daemon_config_reload, request_daemon_shutdown, websocket_url_from_env,
 };
 pub use inbound_priority::{

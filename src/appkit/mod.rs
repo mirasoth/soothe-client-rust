@@ -6,10 +6,10 @@ mod broadcaster;
 mod chunk_filter;
 mod classifier;
 mod daemon_session;
+mod loop_session_store;
 mod observability;
 mod pool;
 mod query_gate;
-mod loop_session_store;
 mod thinking_step;
 mod turn_boundary;
 mod turn_runner;
@@ -24,12 +24,12 @@ pub use classifier::{
 pub use daemon_session::{
     DaemonSession, DaemonSessionOptions, EarlyDropFn, SendTurnOptions, TurnChunk,
 };
+pub use loop_session_store::{InMemoryLoopSessionStore, LoopSessionEntry, LoopSessionStore};
 pub use observability::TurnEventStats;
 pub use pool::{
     input_message_for_loop, ConnectionPool, ErrPoolExhausted, PoolConfig, PoolStats, PooledConn,
 };
 pub use query_gate::{CancelFn, ErrQueryBusy, QueryGate, SendCancelFn};
-pub use loop_session_store::{InMemoryLoopSessionStore, LoopSessionEntry, LoopSessionStore};
 pub use thinking_step::{default_thinking_step_events, extract_thinking_step};
 pub use turn_boundary::{
     is_daemon_turn_end_event, TurnBoundary, TurnLifecycleGate, TURN_END_IDLE, TURN_END_STOPPED,
