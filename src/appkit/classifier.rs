@@ -263,9 +263,10 @@ impl EventClassifier {
             && state.eq_ignore_ascii_case("idle")
             && self.is_substantive_assistant_reply(accumulated)
         {
+            let idle_turn = crate::turn_boundary::frame_turn_id(Some(msg));
             if self.cfg.gate_turn_end_signals
                 && !gate
-                    .map(TurnLifecycleGate::allow_idle_complete)
+                    .map(|g| g.allow_idle_complete(idle_turn.as_deref()))
                     .unwrap_or(false)
             {
                 return ChatEventResult::default();
@@ -319,10 +320,13 @@ impl EventClassifier {
         }
 
         if mode == "custom" && is_turn_end_custom_data(&data) {
+            let data_turn = crate::turn_boundary::frame_turn_id(Some(&data));
+            let outer_turn = crate::turn_boundary::frame_turn_id(Some(msg));
+            let frame_turn = data_turn.as_deref().or(outer_turn.as_deref());
             if self.cfg.treat_stream_end_as_complete
                 && self.is_substantive_assistant_reply(accumulated)
                 && gate
-                    .map(TurnLifecycleGate::allow_stream_end)
+                    .map(|g| g.allow_stream_end(frame_turn))
                     .unwrap_or(false)
             {
                 return self.deliverable_result(accumulated.trim(), STREAM_END);
@@ -741,16 +745,20 @@ mod tests {
         let end = json!({
             "type": "event",
             "mode": "custom",
-            "data": {"type": STREAM_END, "scope": "turn"}
+            "turn_id": "L1:1",
+            "data": {"type": STREAM_END, "scope": "turn", "turn_id": "L1:1"}
         });
 
         let r = cl.classify_turn(&end, accumulated, Some(&mut gate));
         assert_eq!(r.terminal, ChatEventTerminal::Continue);
 
-        gate.observe(&json!({"type": "status", "state": "running", "loop_id": "L1"}));
+        gate.observe(&json!({
+            "type": "status", "state": "running", "loop_id": "L1", "turn_id": "L1:1"
+        }));
         let chunk = json!({
             "type": "event",
             "mode": "messages",
+            "turn_id": "L1:1",
             "data": [{"type": "AIMessageChunk", "content": "Dali weather"}]
         });
         let _ = cl.classify_turn(&chunk, "", Some(&mut gate));

@@ -712,12 +712,14 @@ fn feed_boundary(boundary: &mut TurnBoundary, msg: &Value) -> Option<&'static st
     let event_type = frame.get("type").and_then(|v| v.as_str()).unwrap_or("");
     if event_type == "status" {
         let state = frame.get("state").and_then(|v| v.as_str()).unwrap_or("");
-        return boundary.feed_status(state);
+        let tid = crate::turn_boundary::frame_turn_id(Some(&frame));
+        return boundary.feed_status_turn(state, tid.as_deref());
     }
     if event_type == "event" {
         let mode = frame.get("mode").and_then(|v| v.as_str()).unwrap_or("");
         let data = frame.get("data").cloned().unwrap_or(Value::Null);
-        return boundary.feed_event(mode, &data);
+        let tid = crate::turn_boundary::frame_turn_id(Some(&frame));
+        return boundary.feed_event_turn(mode, &data, tid.as_deref());
     }
     None
 }

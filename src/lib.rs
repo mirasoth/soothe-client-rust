@@ -86,7 +86,10 @@ pub use stream_terminal::{
     extract_loop_id_from_inbound, inbound_needs_delivery_ack, is_turn_end_custom_data,
     is_turn_progress_chunk, stale_pending_frame_label, STREAM_END,
 };
-pub use turn_boundary::{format_turn_id, frame_seq, frame_turn_id, parse_turn_generation};
+pub use turn_boundary::{
+    format_turn_id, frame_seq, frame_turn_id, is_idle_terminal_allowed, is_turn_terminal_allowed,
+    parse_turn_generation, turn_ids_match,
+};
 pub use verbosity::{
     is_valid_verbosity_level, should_show, VerbosityTier, VERBOSITY_DEBUG, VERBOSITY_NORMAL,
     VERBOSITY_QUIET,

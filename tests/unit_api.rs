@@ -69,12 +69,13 @@ fn stream_terminal_helpers() {
 fn appkit_turn_boundary_public_surface() {
     let mut b = TurnBoundary::default();
     assert!(b.feed_status("idle").is_none());
-    b.feed_status("running");
-    b.feed_event(
+    b.feed_status_turn("running", Some("L:1"));
+    b.feed_event_turn(
         "messages",
         &serde_json::json!([{"type":"AIMessageChunk","content":"hi there reply"}]),
+        Some("L:1"),
     );
-    assert_eq!(b.feed_status("idle"), Some(TURN_END_IDLE));
+    assert_eq!(b.feed_status_turn("idle", Some("L:1")), Some(TURN_END_IDLE));
     assert!(is_daemon_turn_end_event(TURN_END_STREAM_END));
     assert!(!is_daemon_turn_end_event(
         "soothe.protocol.message.goal_completion"

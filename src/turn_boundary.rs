@@ -69,6 +69,51 @@ pub fn frame_seq(frame: Option<&Value>) -> Option<u64> {
     None
 }
 
+/// True when both ids are non-empty and equal. Absent ids never match.
+pub fn turn_ids_match(expected: Option<&str>, candidate: Option<&str>) -> bool {
+    let exp = expected.map(str::trim).filter(|s| !s.is_empty());
+    let cand = candidate.map(str::trim).filter(|s| !s.is_empty());
+    match (exp, cand) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Gate for turn-scoped `stream.end` / `strange_loop.completed`.
+pub fn is_turn_terminal_allowed(
+    expected_turn_id: Option<&str>,
+    frame_turn: Option<&str>,
+    query_started: bool,
+    turn_progress_seen: bool,
+) -> bool {
+    if !query_started || !turn_progress_seen {
+        return false;
+    }
+    turn_ids_match(expected_turn_id, frame_turn)
+}
+
+/// Gate for `status=idle` soft-complete.
+pub fn is_idle_terminal_allowed(
+    expected_turn_id: Option<&str>,
+    frame_turn: Option<&str>,
+    query_started: bool,
+    turn_progress_seen: bool,
+    cancellation_seen: bool,
+) -> bool {
+    let exp = expected_turn_id.map(str::trim).filter(|s| !s.is_empty());
+    if !query_started || exp.is_none() {
+        return false;
+    }
+    let cand = frame_turn.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(c) = cand {
+        if !turn_ids_match(exp, Some(c)) {
+            return false;
+        }
+        return turn_progress_seen || cancellation_seen;
+    }
+    cancellation_seen
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,5 +131,15 @@ mod tests {
         let f = json!({"turn_id": "L:1", "seq": 4});
         assert_eq!(frame_turn_id(Some(&f)).as_deref(), Some("L:1"));
         assert_eq!(frame_seq(Some(&f)), Some(4));
+    }
+
+    #[test]
+    fn absent_ids_never_match() {
+        assert!(turn_ids_match(Some("L:1"), Some("L:1")));
+        assert!(!turn_ids_match(Some("L:1"), None));
+        assert!(!turn_ids_match(None, Some("L:1")));
+        assert!(!is_turn_terminal_allowed(None, Some("L:1"), true, true));
+        assert!(!is_turn_terminal_allowed(Some("L:1"), None, true, true));
+        assert!(is_turn_terminal_allowed(Some("L:1"), Some("L:1"), true, true));
     }
 }

@@ -196,16 +196,19 @@ fn classifier_phase_not_in_config() {
 #[test]
 fn turn_boundary_stream_end_and_idle() {
     let mut b = TurnBoundary::default();
-    let end = json!({"type": STREAM_END, "scope": "turn"});
+    let end = json!({"type": STREAM_END, "scope": "turn", "turn_id": "L:1"});
     assert!(b.feed_event("custom", &end).is_none());
-    b.feed_status("running");
-    b.feed_event("messages", &json!([{"content":"x"}]));
-    assert_eq!(b.feed_event("custom", &end), Some(TURN_END_STREAM_END));
+    b.feed_status_turn("running", Some("L:1"));
+    b.feed_event_turn("messages", &json!([{"content":"x"}]), Some("L:1"));
+    assert_eq!(
+        b.feed_event_turn("custom", &end, Some("L:1")),
+        Some(TURN_END_STREAM_END)
+    );
 
     let mut b2 = TurnBoundary::default();
-    b2.feed_status("running");
-    b2.feed_event("messages", &json!([{"content":"y"}]));
-    assert_eq!(b2.feed_status("idle"), Some(TURN_END_IDLE));
+    b2.feed_status_turn("running", Some("L:1"));
+    b2.feed_event_turn("messages", &json!([{"content":"y"}]), Some("L:1"));
+    assert_eq!(b2.feed_status_turn("idle", Some("L:1")), Some(TURN_END_IDLE));
 }
 
 #[test]

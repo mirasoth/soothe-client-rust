@@ -3,6 +3,10 @@
 use serde_json::Value;
 
 use crate::stream_terminal::{is_turn_end_custom_data, is_turn_progress_chunk, STREAM_END};
+use crate::turn_boundary::{
+    frame_turn_id, is_idle_terminal_allowed, is_turn_terminal_allowed, parse_turn_generation,
+    turn_ids_match,
+};
 
 /// Completion event for turn-scoped `soothe.stream.end`.
 pub const TURN_END_STREAM_END: &str = STREAM_END;
@@ -16,10 +20,12 @@ pub const TURN_END_STOPPED: &str = "status.stopped";
 pub struct TurnLifecycleGate {
     /// Saw `status=running` for this turn.
     pub saw_running: bool,
-    /// Saw any event payload after filtering.
-    pub saw_stream_payload: bool,
     /// Saw non-intake turn progress (`messages` / step customs).
     pub saw_turn_progress: bool,
+    /// Bound turn_id from status=running.
+    pub expected_turn_id: Option<String>,
+    /// Cancellation notice seen.
+    pub cancellation_seen: bool,
 }
 
 impl TurnLifecycleGate {
@@ -27,7 +33,7 @@ impl TurnLifecycleGate {
     pub fn observe(&mut self, msg: &Value) {
         if msg.get("type").and_then(|v| v.as_str()) == Some("status") {
             if let Some(state) = msg.get("state").and_then(|v| v.as_str()) {
-                self.observe_status(state);
+                self.observe_status(state, frame_turn_id(Some(msg)));
             }
             return;
         }
@@ -39,28 +45,55 @@ impl TurnLifecycleGate {
     }
 
     /// Observe a status frame.
-    pub fn observe_status(&mut self, state: &str) {
+    pub fn observe_status(&mut self, state: &str, turn_id: Option<String>) {
         if state.eq_ignore_ascii_case("running") {
             self.saw_running = true;
+            if let Some(status_turn) = turn_id {
+                let new_gen = parse_turn_generation(Some(&status_turn));
+                let old_gen = parse_turn_generation(self.expected_turn_id.as_deref());
+                if self.expected_turn_id.is_none()
+                    || (new_gen.is_some()
+                        && (old_gen.is_none() || new_gen.unwrap() >= old_gen.unwrap()))
+                {
+                    if self
+                        .expected_turn_id
+                        .as_ref()
+                        .is_some_and(|e| e != &status_turn)
+                    {
+                        self.saw_turn_progress = false;
+                    }
+                    self.expected_turn_id = Some(status_turn);
+                }
+            }
         }
     }
 
     /// Observe an event frame.
     pub fn observe_event(&mut self, mode: &str, data: &Value) {
-        self.saw_stream_payload = true;
         if is_turn_progress_chunk(mode, data) {
             self.saw_turn_progress = true;
         }
     }
 
     /// Whether turn-scoped `stream.end` may end the turn.
-    pub fn allow_stream_end(&self) -> bool {
-        self.saw_running && self.saw_turn_progress
+    pub fn allow_stream_end(&self, frame_turn: Option<&str>) -> bool {
+        is_turn_terminal_allowed(
+            self.expected_turn_id.as_deref(),
+            frame_turn,
+            self.saw_running,
+            self.saw_turn_progress,
+        )
     }
 
     /// Whether `status=idle` may soft-complete the turn.
-    pub fn allow_idle_complete(&self) -> bool {
-        self.saw_running && self.saw_stream_payload
+    pub fn allow_idle_complete(&self, frame_turn: Option<&str>) -> bool {
+        is_idle_terminal_allowed(
+            self.expected_turn_id.as_deref(),
+            frame_turn,
+            self.saw_running,
+            self.saw_turn_progress,
+            self.cancellation_seen,
+        )
     }
 }
 
@@ -76,28 +109,55 @@ pub struct TurnBoundary {
 }
 
 impl TurnBoundary {
-    /// Feed a status frame. Returns Some(reason) when the turn ends.
+    /// Feed a status frame (turn_id omitted — prefer [`Self::feed_status_turn`]).
     pub fn feed_status(&mut self, state: &str) -> Option<&'static str> {
+        self.feed_status_turn(state, None)
+    }
+
+    /// Feed a status frame with wire `turn_id`.
+    pub fn feed_status_turn(
+        &mut self,
+        state: &str,
+        turn_id: Option<&str>,
+    ) -> Option<&'static str> {
         if self.ended {
             return static_reason(&self.reason);
         }
-        self.gate.observe_status(state);
+        self.gate
+            .observe_status(state, turn_id.map(|s| s.to_string()));
         if state.eq_ignore_ascii_case("stopped") && self.gate.saw_running {
+            if self.gate.expected_turn_id.is_some()
+                && !turn_ids_match(self.gate.expected_turn_id.as_deref(), turn_id)
+            {
+                return None;
+            }
             return Some(self.mark(TURN_END_STOPPED));
         }
-        if state.eq_ignore_ascii_case("idle") && self.gate.allow_idle_complete() {
+        if state.eq_ignore_ascii_case("idle") && self.gate.allow_idle_complete(turn_id) {
             return Some(self.mark(TURN_END_IDLE));
         }
         None
     }
 
-    /// Feed an event frame. Returns Some(reason) when the turn ends.
+    /// Feed an event frame (outer turn_id omitted).
     pub fn feed_event(&mut self, mode: &str, data: &Value) -> Option<&'static str> {
+        self.feed_event_turn(mode, data, None)
+    }
+
+    /// Feed an event frame with outer-frame `turn_id`.
+    pub fn feed_event_turn(
+        &mut self,
+        mode: &str,
+        data: &Value,
+        frame_turn: Option<&str>,
+    ) -> Option<&'static str> {
         if self.ended {
             return static_reason(&self.reason);
         }
         self.gate.observe_event(mode, data);
-        if mode == "custom" && is_turn_end_custom_data(data) && self.gate.allow_stream_end() {
+        let data_turn = frame_turn_id(Some(data));
+        let tid = data_turn.as_deref().or(frame_turn);
+        if mode == "custom" && is_turn_end_custom_data(data) && self.gate.allow_stream_end(tid) {
             return Some(self.mark(TURN_END_STREAM_END));
         }
         None
@@ -125,49 +185,4 @@ pub fn is_daemon_turn_end_event(completion_event: &str) -> bool {
         completion_event.trim(),
         TURN_END_STREAM_END | TURN_END_IDLE | TURN_END_STOPPED
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn ignores_pre_running_idle() {
-        let mut b = TurnBoundary::default();
-        assert!(b.feed_status("idle").is_none());
-        b.feed_status("running");
-        b.feed_event(
-            "messages",
-            &json!([{"type":"AIMessageChunk","content":"x"}]),
-        );
-        assert_eq!(b.feed_status("idle"), Some(TURN_END_IDLE));
-    }
-
-    #[test]
-    fn stream_end_requires_running_and_progress() {
-        let mut b = TurnBoundary::default();
-        let end = json!({"type": STREAM_END, "scope": "turn"});
-        assert!(b.feed_event("custom", &end).is_none());
-        b.feed_status("running");
-        assert!(b.feed_event("custom", &end).is_none());
-        b.feed_event("messages", &json!({}));
-        assert_eq!(b.feed_event("custom", &end), Some(TURN_END_STREAM_END));
-    }
-
-    #[test]
-    fn stopped_after_running() {
-        let mut b = TurnBoundary::default();
-        assert!(b.feed_status("stopped").is_none());
-        b.feed_status("running");
-        assert_eq!(b.feed_status("stopped"), Some(TURN_END_STOPPED));
-    }
-
-    #[test]
-    fn daemon_turn_end_event_helper() {
-        assert!(is_daemon_turn_end_event(TURN_END_STREAM_END));
-        assert!(!is_daemon_turn_end_event(
-            "soothe.protocol.message.goal_completion"
-        ));
-    }
 }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.6 — 2026-07-31
+
 ### Changed
 - Display card wire types renamed to `soothe.card.*` (`created` / `updated` / `finalized` / `replay.begin` / `replay.end`)
 

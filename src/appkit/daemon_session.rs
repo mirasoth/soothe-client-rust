@@ -10,6 +10,10 @@ use crate::client::{unwrap_next_frame, Client, SendInputOptions};
 use crate::errors::{Error, Result};
 use crate::session::{bootstrap_loop_session, connect_with_retries, BootstrapOptions};
 use crate::stream_terminal::{is_turn_end_custom_data, is_turn_progress_chunk, STREAM_END};
+use crate::turn_boundary::{
+    frame_turn_id, is_idle_terminal_allowed, is_turn_terminal_allowed, parse_turn_generation,
+    turn_ids_match,
+};
 
 use super::chunk_filter::should_drop_stream_chunk_early;
 use super::observability::TurnEventStats;
@@ -285,7 +289,7 @@ impl DaemonSession {
         let mut out = Vec::new();
         let mut query_started = false;
         let mut expected_loop_id = self.loop_id().await;
-        let mut stream_payload_seen = false;
+        let mut expected_turn_id: Option<String> = None;
         let mut turn_progress_seen = false;
         let mut cancel_seen = false;
         let absolute_deadline = max_wait.map(|d| tokio::time::Instant::now() + d);
@@ -345,6 +349,31 @@ impl DaemonSession {
                 continue;
             }
 
+            let ev_turn = frame_turn_id(Some(&frame));
+            let status_state = if event_type == "status" {
+                frame.get("state").and_then(|v| v.as_str()).unwrap_or("")
+            } else {
+                ""
+            };
+            let is_running_status = status_state == "running";
+            let is_terminal_status = status_state == "idle" || status_state == "stopped";
+            if let Some(ref expected) = expected_turn_id {
+                if (event_type == "event" || event_type == "status") && !is_running_status {
+                    if is_terminal_status {
+                        if let Some(ref tid) = ev_turn {
+                            if !turn_ids_match(Some(expected.as_str()), Some(tid.as_str())) {
+                                continue;
+                            }
+                        }
+                    } else if !turn_ids_match(
+                        Some(expected.as_str()),
+                        ev_turn.as_deref(),
+                    ) {
+                        continue;
+                    }
+                }
+            }
+
             if event_type == "error" {
                 let msg = frame
                     .get("error")
@@ -364,19 +393,52 @@ impl DaemonSession {
                         expected_loop_id = lid.to_string();
                     }
                 }
-                let state = frame.get("state").and_then(|v| v.as_str()).unwrap_or("");
-                match state {
-                    "running" => query_started = true,
+                match status_state {
+                    "running" => {
+                        query_started = true;
+                        if let Some(status_turn) = frame_turn_id(Some(&frame)) {
+                            let new_gen = parse_turn_generation(Some(&status_turn));
+                            let old_gen = parse_turn_generation(expected_turn_id.as_deref());
+                            if expected_turn_id.is_none()
+                                || (new_gen.is_some()
+                                    && (old_gen.is_none() || new_gen.unwrap() >= old_gen.unwrap()))
+                            {
+                                if expected_turn_id
+                                    .as_ref()
+                                    .is_some_and(|e| e != &status_turn)
+                                {
+                                    turn_progress_seen = false;
+                                }
+                                expected_turn_id = Some(status_turn);
+                            }
+                        }
+                    }
                     "stopped" if query_started => {
-                        *self.last_turn_end_state.lock().await = state.into();
+                        let stop_turn = frame_turn_id(Some(&frame));
+                        if expected_turn_id.is_some()
+                            && !turn_ids_match(
+                                expected_turn_id.as_deref(),
+                                stop_turn.as_deref(),
+                            )
+                        {
+                            continue;
+                        }
+                        *self.last_turn_end_state.lock().await = status_state.into();
                         self.drain_after_idle(&expected_loop_id, &mut out).await;
                         return Ok(out);
                     }
                     "idle" if query_started => {
-                        if !stream_payload_seen && !cancel_seen {
+                        let idle_turn = frame_turn_id(Some(&frame));
+                        if !is_idle_terminal_allowed(
+                            expected_turn_id.as_deref(),
+                            idle_turn.as_deref(),
+                            query_started,
+                            turn_progress_seen,
+                            cancel_seen,
+                        ) {
                             continue;
                         }
-                        *self.last_turn_end_state.lock().await = state.into();
+                        *self.last_turn_end_state.lock().await = status_state.into();
                         self.drain_after_idle(&expected_loop_id, &mut out).await;
                         return Ok(out);
                     }
@@ -418,14 +480,18 @@ impl DaemonSession {
                 continue;
             }
 
-            if mode == "custom"
-                && is_turn_end_custom_data(&data)
-                && (!query_started || !turn_progress_seen)
-            {
-                continue;
+            if mode == "custom" && is_turn_end_custom_data(&data) {
+                let data_turn = frame_turn_id(Some(&data)).or_else(|| ev_turn.clone());
+                if !is_turn_terminal_allowed(
+                    expected_turn_id.as_deref(),
+                    data_turn.as_deref(),
+                    query_started,
+                    turn_progress_seen,
+                ) {
+                    continue;
+                }
             }
 
-            stream_payload_seen = true;
             if is_turn_progress_chunk(&mode, &data) {
                 turn_progress_seen = true;
             }
