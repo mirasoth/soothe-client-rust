@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.7 — 2026-08-07
+
+### Changed
+- Fix version bump for dependency sync
+
 ## 0.3.6 — 2026-07-31
 
 ### Changed
