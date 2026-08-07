@@ -72,6 +72,8 @@ pub struct InputOpts {
     pub intent_hint: Option<String>,
     /// Preferred subagent.
     pub preferred_subagent: Option<String>,
+    /// Forced StrangeLoop intake scope (`trivial`|`simple`|`complex`).
+    pub intake_scope: Option<String>,
     /// Response schema.
     pub response_schema: Option<Value>,
     /// Schema name.
@@ -292,6 +294,7 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
             loop_id: Some(loop_id.clone()),
             intent_hint: opts.as_ref().and_then(|o| o.intent_hint.clone()),
             preferred_subagent: opts.as_ref().and_then(|o| o.preferred_subagent.clone()),
+            intake_scope: opts.as_ref().and_then(|o| o.intake_scope.clone()),
             response_schema: opts.as_ref().and_then(|o| o.response_schema.clone()),
             response_schema_name: opts.as_ref().and_then(|o| o.response_schema_name.clone()),
             response_schema_strict: opts.as_ref().and_then(|o| o.response_schema_strict),

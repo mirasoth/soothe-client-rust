@@ -108,6 +108,27 @@ fn preferred_subagent_in_loop_input() {
 }
 
 #[test]
+fn intake_scope_in_loop_input() {
+    let msg = input_message_for_loop(
+        "fix typo",
+        "loop-1",
+        None,
+        Some(&InputOpts {
+            intake_scope: Some("simple".into()),
+            ..Default::default()
+        }),
+    );
+    let params = msg
+        .get("params")
+        .and_then(|v| v.as_object())
+        .expect("params");
+    assert_eq!(
+        params.get("intake_scope").and_then(|v| v.as_str()),
+        Some("simple")
+    );
+}
+
+#[test]
 fn subagent_event_constants() {
     assert_eq!(
         EVENT_DEEP_RESEARCH_STARTED,

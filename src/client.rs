@@ -55,6 +55,8 @@ pub struct SendInputOptions {
     pub loop_id: Option<String>,
     /// Preferred subagent.
     pub preferred_subagent: Option<String>,
+    /// Forced StrangeLoop intake scope (`trivial`|`simple`|`complex`).
+    pub intake_scope: Option<String>,
     /// Model override.
     pub model: Option<String>,
     /// Model params.
@@ -627,6 +629,9 @@ impl Client {
         }
         if let Some(v) = opts.preferred_subagent {
             params.insert("preferred_subagent".into(), json!(v));
+        }
+        if let Some(v) = opts.intake_scope {
+            params.insert("intake_scope".into(), json!(v));
         }
         if let Some(v) = opts.model {
             params.insert("model".into(), json!(v));

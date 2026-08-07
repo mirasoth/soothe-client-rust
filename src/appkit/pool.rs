@@ -552,6 +552,14 @@ pub fn input_message_for_loop(
         {
             params.insert("preferred_subagent".into(), json!(s));
         }
+        if let Some(s) = o
+            .intake_scope
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
+            params.insert("intake_scope".into(), json!(s));
+        }
         if let Some(schema) = &o.response_schema {
             params.insert("response_schema".into(), schema.clone());
         }

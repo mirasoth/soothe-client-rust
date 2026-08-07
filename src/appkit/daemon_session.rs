@@ -67,6 +67,8 @@ impl std::fmt::Debug for DaemonSessionOptions {
 pub struct SendTurnOptions {
     /// Preferred subagent.
     pub preferred_subagent: Option<String>,
+    /// Forced StrangeLoop intake scope (`trivial`|`simple`|`complex`).
+    pub intake_scope: Option<String>,
     /// Model override.
     pub model: Option<String>,
     /// Model params.
@@ -225,6 +227,7 @@ impl DaemonSession {
         let input = SendInputOptions {
             loop_id: Some(loop_id),
             preferred_subagent: opts.preferred_subagent,
+            intake_scope: opts.intake_scope,
             model: opts.model,
             model_params: opts.model_params,
             attachments: opts.attachments,
