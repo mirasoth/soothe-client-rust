@@ -65,10 +65,6 @@ impl std::fmt::Debug for DaemonSessionOptions {
 /// Options for `send_turn`.
 #[derive(Debug, Clone, Default)]
 pub struct SendTurnOptions {
-    /// Autonomous mode.
-    pub autonomous: bool,
-    /// Max iterations.
-    pub max_iterations: Option<u32>,
     /// Preferred subagent.
     pub preferred_subagent: Option<String>,
     /// Model override.
@@ -228,8 +224,6 @@ impl DaemonSession {
         let opts = opts.unwrap_or_default();
         let input = SendInputOptions {
             loop_id: Some(loop_id),
-            autonomous: opts.autonomous,
-            max_iterations: opts.max_iterations,
             preferred_subagent: opts.preferred_subagent,
             model: opts.model,
             model_params: opts.model_params,

@@ -529,7 +529,6 @@ pub fn input_message_for_loop(
 ) -> Map<String, Value> {
     let mut params = Map::new();
     params.insert("content".into(), json!(text));
-    params.insert("autonomous".into(), json!(false));
     if !loop_id.trim().is_empty() {
         params.insert("loop_id".into(), json!(loop_id));
     }
@@ -581,7 +580,6 @@ pub fn input_message_for_loop(
                 Value::Object({
                     let mut p = Map::new();
                     p.insert("content".into(), json!(text));
-                    p.insert("autonomous".into(), json!(false));
                     if !loop_id.trim().is_empty() {
                         p.insert("loop_id".into(), json!(loop_id));
                     }

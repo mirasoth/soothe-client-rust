@@ -131,6 +131,5 @@ pub async fn bootstrap_loop_session(
     out.insert("type".into(), json!("session_ready"));
     out.insert("loop_id".into(), json!(loop_id));
     out.insert("success".into(), json!(true));
-    out.insert("autopilot_mode".into(), json!("solo"));
     Ok(out)
 }

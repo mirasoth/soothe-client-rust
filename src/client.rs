@@ -53,10 +53,6 @@ impl Default for ClientConfig {
 pub struct SendInputOptions {
     /// Loop id (required for multi-loop).
     pub loop_id: Option<String>,
-    /// Autonomous mode.
-    pub autonomous: bool,
-    /// Max iterations when autonomous.
-    pub max_iterations: Option<u32>,
     /// Preferred subagent.
     pub preferred_subagent: Option<String>,
     /// Model override.
@@ -628,12 +624,6 @@ impl Client {
         params.insert("content".into(), json!(text));
         if let Some(lid) = opts.loop_id {
             params.insert("loop_id".into(), json!(lid));
-        }
-        if opts.autonomous {
-            params.insert("autonomous".into(), json!(true));
-        }
-        if let Some(n) = opts.max_iterations {
-            params.insert("max_iterations".into(), json!(n));
         }
         if let Some(v) = opts.preferred_subagent {
             params.insert("preferred_subagent".into(), json!(v));
@@ -1443,7 +1433,7 @@ mod tests {
     #[test]
     fn send_input_options_default() {
         let o = SendInputOptions::default();
-        assert!(!o.autonomous);
         assert!(o.loop_id.is_none());
+        assert!(o.preferred_subagent.is_none());
     }
 }
