@@ -69,10 +69,7 @@ pub use inbound_priority::{
     inbound_frame_drop_priority, DEFAULT_INBOUND_MAX_SIZE, DROP_PRIORITY_CRITICAL,
     DROP_PRIORITY_HIGH, DROP_PRIORITY_NORMAL,
 };
-pub use intent_hints::{
-    validate_loop_input_intent_hint, DEFAULT_DELIVERABLE_PHASES, EMBED, IMAGE_TO_TEXT, OCR,
-    TEXT_COMPLETION,
-};
+pub use intent_hints::{DEFAULT_DELIVERABLE_PHASES, EMBED, IMAGE_TO_TEXT, OCR, TEXT_COMPLETION};
 pub use protocol::{
     as_str, decode_message, decode_message_typed, expand_wire_messages, extract_soothe_loop_id,
     is_loop_assistant_phase, new_connection_init, new_notification, new_ping, new_pong,

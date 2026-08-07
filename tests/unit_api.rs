@@ -8,7 +8,7 @@ use soothe_client::events::{
     classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_COMPLETED,
     EVENT_DEEP_RESEARCH_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
 };
-use soothe_client::intent_hints::{validate_loop_input_intent_hint, TEXT_COMPLETION};
+use soothe_client::intent_hints::TEXT_COMPLETION;
 use soothe_client::protocol::{
     expand_wire_messages, new_connection_init, new_request, new_request_id, PROTO_VERSION,
 };
@@ -61,8 +61,7 @@ fn stream_terminal_helpers() {
         &serde_json::json!({"type": STREAM_END})
     ));
     assert!(is_turn_progress_chunk("messages", &serde_json::json!({})));
-    assert!(validate_loop_input_intent_hint(TEXT_COMPLETION).is_none());
-    assert!(validate_loop_input_intent_hint("direct_llm").is_some());
+    assert_eq!(TEXT_COMPLETION, "text_completion");
 }
 
 #[test]

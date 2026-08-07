@@ -19,39 +19,3 @@ pub const DEFAULT_DELIVERABLE_PHASES: &[&str] = &[
     "ocr",
     "embed",
 ];
-
-const REMOVED: &[&str] = &["direct_llm", "quiz", "direct_model"];
-
-/// Validate an intent hint; returns an error string when invalid.
-pub fn validate_loop_input_intent_hint(hint: &str) -> Option<String> {
-    let h = hint.trim();
-    if h.is_empty() {
-        return None;
-    }
-    if REMOVED.contains(&h) {
-        return Some(format!(
-            "intent_hint '{h}' is removed; use text_completion or another supported hint"
-        ));
-    }
-    let ok = matches!(h, TEXT_COMPLETION | IMAGE_TO_TEXT | OCR | EMBED);
-    if ok {
-        None
-    } else {
-        Some(format!("unsupported intent_hint '{h}'"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn accepts_text_completion() {
-        assert!(validate_loop_input_intent_hint(TEXT_COMPLETION).is_none());
-    }
-
-    #[test]
-    fn rejects_removed() {
-        assert!(validate_loop_input_intent_hint("direct_llm").is_some());
-    }
-}

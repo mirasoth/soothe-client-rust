@@ -9,7 +9,6 @@ use tokio::sync::mpsc;
 
 use crate::client::{unwrap_next_frame, SendInputOptions};
 use crate::errors::{Error, Result};
-use crate::intent_hints::validate_loop_input_intent_hint;
 use crate::stream_terminal::is_turn_end_custom_data;
 
 use super::attachments::{compact_attachments, CompactImageOptions};
@@ -172,7 +171,6 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
         attachments: Option<Value>,
         opts: Option<InputOpts>,
     ) -> Result<String> {
-        self.validate_opts(opts.as_ref())?;
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancelled.clone();
         let cancel_fn: CancelFn = Arc::new(move || {
@@ -198,8 +196,7 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
 
     /// Run a turn when the caller already reserved the gate via [`QueryGate::acquire`].
     ///
-    /// Releases the gate on all exit paths (including `validate_opts` failure), matching
-    /// Go `ExecuteReserved`.
+    /// Releases the gate on all exit paths, matching Go `ExecuteReserved`.
     pub async fn execute_reserved(
         &self,
         session_id: &str,
@@ -213,10 +210,6 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
             return Err(Error::msg(format!(
                 "appkit: ExecuteReserved requires an active QueryGate reservation for {session_id}"
             )));
-        }
-        if let Err(e) = self.validate_opts(opts.as_ref()) {
-            self.gate.release(session_id);
-            return Err(e);
         }
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancelled.clone();
@@ -237,15 +230,6 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
             .await;
         self.gate.release(session_id);
         result
-    }
-
-    fn validate_opts(&self, opts: Option<&InputOpts>) -> Result<()> {
-        if let Some(hint) = opts.and_then(|o| o.intent_hint.as_deref()) {
-            if let Some(msg) = validate_loop_input_intent_hint(hint) {
-                return Err(Error::msg(msg));
-            }
-        }
-        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
