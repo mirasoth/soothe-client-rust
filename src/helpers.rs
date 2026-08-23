@@ -144,6 +144,11 @@ pub async fn fetch_loop_history(client: &Client, loop_id: &str) -> Result<Map<St
     client.loop_history_fetch(loop_id).await
 }
 
+/// Fetch the execution-progress snapshot (plan, step_index, iteration, status).
+pub async fn fetch_execution_state(client: &Client, loop_id: &str) -> Result<Map<String, Value>> {
+    client.loop_execution_state_fetch(loop_id).await
+}
+
 /// Submit access_key/secret_key credentials via RPC.
 pub async fn request_auth(
     client: &Client,

@@ -116,6 +116,10 @@ async fn integration_loop_tree_cards_history_messages_state() {
             Ok(v) => eprintln!("loop_history ok: {v:?}"),
             Err(e) => eprintln!("loop_history soft-fail: {e}"),
         }
+        match client.loop_execution_state_fetch(&loop_id).await {
+            Ok(v) => eprintln!("loop_execution_state ok: {v:?}"),
+            Err(e) => eprintln!("loop_execution_state soft-fail: {e}"),
+        }
         match client.loop_messages(&loop_id, 10, 0).await {
             Ok(v) => eprintln!("loop_messages ok: {v:?}"),
             Err(e) => eprintln!("loop_messages soft-fail: {e}"),

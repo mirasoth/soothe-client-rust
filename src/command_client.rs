@@ -196,6 +196,13 @@ impl AsyncCommandClient {
         self.rpc("autopilot_get_job", params).await
     }
 
+    /// `autopilot_top` — jobs → goals → loops snapshot for CLI top.
+    pub async fn autopilot_top(&self, include_terminal: bool) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("include_terminal".into(), json!(include_terminal));
+        self.rpc("autopilot_top", params).await
+    }
+
     /// `cron_add` (normalized to `{"job": {...}}` when possible).
     pub async fn cron_add(&self, text: &str, priority: Option<i32>) -> Result<Map<String, Value>> {
         let mut params = Map::new();
@@ -376,6 +383,11 @@ impl CommandClient {
     /// `autopilot_get_job`.
     pub fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
         self.block(self.inner.autopilot_get_job(job_id))
+    }
+
+    /// `autopilot_top` — jobs → goals → loops snapshot for CLI top.
+    pub fn autopilot_top(&self, include_terminal: bool) -> Result<Map<String, Value>> {
+        self.block(self.inner.autopilot_top(include_terminal))
     }
 
     /// `cron_add`.

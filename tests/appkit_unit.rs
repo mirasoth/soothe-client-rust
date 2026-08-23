@@ -208,7 +208,10 @@ fn turn_boundary_stream_end_and_idle() {
     let mut b2 = TurnBoundary::default();
     b2.feed_status_turn("running", Some("L:1"));
     b2.feed_event_turn("messages", &json!([{"content":"y"}]), Some("L:1"));
-    assert_eq!(b2.feed_status_turn("idle", Some("L:1")), Some(TURN_END_IDLE));
+    assert_eq!(
+        b2.feed_status_turn("idle", Some("L:1")),
+        Some(TURN_END_IDLE)
+    );
 }
 
 #[test]

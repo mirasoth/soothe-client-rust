@@ -717,6 +717,19 @@ impl Client {
             .await
     }
 
+    /// `loop_execution_state_fetch` — focused execution-progress snapshot
+    /// (plan, step_index, iteration, status) for the loop's bound checkpoint thread.
+    pub async fn loop_execution_state_fetch(&self, loop_id: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        self.request(
+            "loop_execution_state_fetch",
+            params,
+            Duration::from_secs(30),
+        )
+        .await
+    }
+
     /// `loop_messages`.
     pub async fn loop_messages(
         &self,

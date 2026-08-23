@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.8 — 2026-08-23
+
+### Added
+- `loop_execution_state_fetch` request-response method in `client.rs` (previously only `send_loop_execution_state_fetch` fire-and-forget existed)
+- `fetch_execution_state` helper in `helpers.rs`, exported from `lib.rs`
+- `loop_execution_state_fetch` assertion in the `integration_loop_tree_cards_history_messages_state` integration test
+
 ## 0.3.7 — 2026-08-07
 
 ### Changed

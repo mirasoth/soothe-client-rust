@@ -115,11 +115,7 @@ impl TurnBoundary {
     }
 
     /// Feed a status frame with wire `turn_id`.
-    pub fn feed_status_turn(
-        &mut self,
-        state: &str,
-        turn_id: Option<&str>,
-    ) -> Option<&'static str> {
+    pub fn feed_status_turn(&mut self, state: &str, turn_id: Option<&str>) -> Option<&'static str> {
         if self.ended {
             return static_reason(&self.reason);
         }

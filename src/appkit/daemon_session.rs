@@ -362,10 +362,7 @@ impl DaemonSession {
                                 continue;
                             }
                         }
-                    } else if !turn_ids_match(
-                        Some(expected.as_str()),
-                        ev_turn.as_deref(),
-                    ) {
+                    } else if !turn_ids_match(Some(expected.as_str()), ev_turn.as_deref()) {
                         continue;
                     }
                 }
@@ -400,10 +397,7 @@ impl DaemonSession {
                                 || (new_gen.is_some()
                                     && (old_gen.is_none() || new_gen.unwrap() >= old_gen.unwrap()))
                             {
-                                if expected_turn_id
-                                    .as_ref()
-                                    .is_some_and(|e| e != &status_turn)
-                                {
+                                if expected_turn_id.as_ref().is_some_and(|e| e != &status_turn) {
                                     turn_progress_seen = false;
                                 }
                                 expected_turn_id = Some(status_turn);
@@ -413,10 +407,7 @@ impl DaemonSession {
                     "stopped" if query_started => {
                         let stop_turn = frame_turn_id(Some(&frame));
                         if expected_turn_id.is_some()
-                            && !turn_ids_match(
-                                expected_turn_id.as_deref(),
-                                stop_turn.as_deref(),
-                            )
+                            && !turn_ids_match(expected_turn_id.as_deref(), stop_turn.as_deref())
                         {
                             continue;
                         }

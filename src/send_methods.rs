@@ -331,6 +331,24 @@ impl Client {
             .await
     }
 
+    /// Send `loop_execution_state_fetch` request envelope
+    /// (Go `SendLoopExecutionStateFetch` parity).
+    pub async fn send_loop_execution_state_fetch(
+        &self,
+        loop_id: &str,
+        request_id: &[&str],
+    ) -> Result<()> {
+        let rid = opt_request_id(request_id);
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        self.send_envelope(new_request_with_id(
+            "loop_execution_state_fetch",
+            params,
+            rid,
+        ))
+        .await
+    }
+
     /// Send `auth` request envelope (Go `SendAuth` parity).
     pub async fn send_auth(
         &self,

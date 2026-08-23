@@ -140,6 +140,11 @@ mod tests {
         assert!(!turn_ids_match(None, Some("L:1")));
         assert!(!is_turn_terminal_allowed(None, Some("L:1"), true, true));
         assert!(!is_turn_terminal_allowed(Some("L:1"), None, true, true));
-        assert!(is_turn_terminal_allowed(Some("L:1"), Some("L:1"), true, true));
+        assert!(is_turn_terminal_allowed(
+            Some("L:1"),
+            Some("L:1"),
+            true,
+            true
+        ));
     }
 }
