@@ -81,6 +81,8 @@ pub struct SendTurnOptions {
     pub clarification_answer: bool,
     /// Intent hint.
     pub intent_hint: Option<String>,
+    /// Interaction mode (`agent`|`ask`).
+    pub interaction_mode: Option<String>,
 }
 
 /// One streamed turn chunk.
@@ -234,6 +236,7 @@ impl DaemonSession {
             clarification_mode: opts.clarification_mode,
             clarification_answer: opts.clarification_answer,
             intent_hint: opts.intent_hint,
+            interaction_mode: opts.interaction_mode,
             ..Default::default()
         };
         self.client.send_input(text, input).await
@@ -269,6 +272,21 @@ impl DaemonSession {
         self.rpc_client.loop_history_fetch(loop_id).await
     }
 
+    /// Invoke a skill via the RPC sidecar socket.
+    ///
+    /// `interaction_mode` (`agent`|`ask`) is forwarded to the daemon when set.
+    pub async fn invoke_skill(
+        &self,
+        skill: &str,
+        args: &str,
+        interaction_mode: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        self.ensure_rpc_connected().await?;
+        self.rpc_client
+            .invoke_skill(skill, args, interaction_mode)
+            .await
+    }
+
     /// Stream turn chunks until idle / stream.end.
     ///
     /// `max_wait` of `None` means no absolute deadline.
@@ -283,6 +301,7 @@ impl DaemonSession {
         *self.last_turn_cancel_seen.lock().await = false;
         *self.turn_event_stats.lock().await = TurnEventStats::new();
 
+        let inbound_baseline = self.client.inbound_dropped();
         let mut out = Vec::new();
         let mut query_started = false;
         let mut expected_loop_id = self.loop_id().await;
@@ -302,17 +321,26 @@ impl DaemonSession {
                         expected_loop_id
                     );
                     *self.last_turn_error_message.lock().await = err.clone();
+                    self.finalize_inbound_dropped(inbound_baseline).await;
                     return Err(Error::msg(err));
                 }
             }
 
-            let ev = self
+            let ev = match self
                 .client
                 .read_event_with_timeout(Duration::from_millis(250))
-                .await?;
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    self.finalize_inbound_dropped(inbound_baseline).await;
+                    return Err(e);
+                }
+            };
             let Some(ev) = ev else {
                 if query_started && !self.client.is_connection_alive() {
                     *self.last_turn_end_state.lock().await = "connection_lost".into();
+                    self.finalize_inbound_dropped(inbound_baseline).await;
                     return Err(Error::msg("daemon connection lost"));
                 }
                 // Idle timeout on read — keep waiting unless absolute deadline.
@@ -377,6 +405,7 @@ impl DaemonSession {
                     .unwrap_or("daemon error")
                     .to_string();
                 *self.last_turn_error_message.lock().await = msg.clone();
+                self.finalize_inbound_dropped(inbound_baseline).await;
                 return Err(Error::msg(msg));
             }
 
@@ -413,6 +442,7 @@ impl DaemonSession {
                         }
                         *self.last_turn_end_state.lock().await = status_state.into();
                         self.drain_after_idle(&expected_loop_id, &mut out).await;
+                        self.finalize_inbound_dropped(inbound_baseline).await;
                         return Ok(out);
                     }
                     "idle" if query_started => {
@@ -428,6 +458,7 @@ impl DaemonSession {
                         }
                         *self.last_turn_end_state.lock().await = status_state.into();
                         self.drain_after_idle(&expected_loop_id, &mut out).await;
+                        self.finalize_inbound_dropped(inbound_baseline).await;
                         return Ok(out);
                     }
                     _ => {}
@@ -459,6 +490,17 @@ impl DaemonSession {
                 .unwrap_or("")
                 .to_string();
 
+            {
+                let mut stats = self.turn_event_stats.lock().await;
+                stats.total += 1;
+                match mode.as_str() {
+                    "messages" => stats.messages += 1,
+                    "updates" => stats.updates += 1,
+                    "custom" => stats.custom += 1,
+                    _ => {}
+                }
+            }
+
             let ns_slice: Vec<Value> = match &namespace {
                 Value::Array(a) => a.clone(),
                 _ => vec![],
@@ -476,12 +518,30 @@ impl DaemonSession {
                     query_started,
                     turn_progress_seen,
                 ) {
+                    self.turn_event_stats.lock().await.skipped += 1;
                     continue;
                 }
             }
 
             if is_turn_progress_chunk(&mode, &data) {
                 turn_progress_seen = true;
+                if mode == "messages" {
+                    self.turn_event_stats.lock().await.text_chunks += 1;
+                }
+            }
+
+            // Tool call / result counting (namespace-based heuristic).
+            let ns_str: String = ns_slice
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(".");
+            if ns_str.contains("tool") {
+                if ns_str.contains("result") {
+                    self.turn_event_stats.lock().await.tool_results += 1;
+                } else {
+                    self.turn_event_stats.lock().await.tool_calls += 1;
+                }
             }
 
             out.push(TurnChunk {
@@ -498,9 +558,16 @@ impl DaemonSession {
                     "completed".into()
                 };
                 self.drain_after_idle(&expected_loop_id, &mut out).await;
+                self.finalize_inbound_dropped(inbound_baseline).await;
                 return Ok(out);
             }
         }
+    }
+
+    /// Record inbound frames dropped during this turn (delta from baseline).
+    async fn finalize_inbound_dropped(&self, baseline: u64) {
+        let now = self.client.inbound_dropped();
+        self.turn_event_stats.lock().await.inbound_dropped = now.saturating_sub(baseline) as usize;
     }
 
     async fn drain_after_idle(&self, expected_loop_id: &str, out: &mut Vec<TurnChunk>) {
@@ -563,6 +630,16 @@ impl DaemonSession {
                 Value::Array(a) => a.clone(),
                 _ => vec![],
             };
+            {
+                let mut stats = self.turn_event_stats.lock().await;
+                stats.total += 1;
+                match mode.as_str() {
+                    "messages" => stats.messages += 1,
+                    "updates" => stats.updates += 1,
+                    "custom" => stats.custom += 1,
+                    _ => {}
+                }
+            }
             if (self.early_drop_fn)(&ns_slice, &mode, &data) {
                 self.turn_event_stats.lock().await.filtered_early += 1;
                 continue;

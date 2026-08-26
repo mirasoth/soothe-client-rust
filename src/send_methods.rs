@@ -84,6 +84,7 @@ impl Client {
         &self,
         skill: &str,
         args: &str,
+        interaction_mode: Option<&str>,
         request_id: &[&str],
     ) -> Result<()> {
         let rid = opt_request_id(request_id);
@@ -91,6 +92,9 @@ impl Client {
         params.insert("skill".into(), json!(skill));
         if !args.is_empty() {
             params.insert("args".into(), json!(args));
+        }
+        if let Some(v) = interaction_mode {
+            params.insert("interaction_mode".into(), json!(v));
         }
         self.send_envelope(new_request_with_id("invoke_skill", params, rid))
             .await

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.3.9 — 2026-08-23
+
+### Added
+- **`interaction_mode` parameter** (Python parity): `SendInputOptions.interaction_mode`,
+  `SendTurnOptions.interaction_mode`, `InputOpts.interaction_mode`; threaded through
+  `Client::send_input`, `Client::invoke_skill`, `DaemonSession::send_turn`,
+  `DaemonSession::invoke_skill`, `send_invoke_skill`, `input_message_for_loop`
+- **`DaemonSession::invoke_skill`** method (RPC sidecar) mirroring the Python
+  `DaemonSession.invoke_skill` entry point
+- **Full `TurnEventStats` (12 fields):** `total`, `messages`, `updates`, `custom`,
+  `skipped`, `filtered_early`, `tool_calls`, `tool_results`, `text_chunks`,
+  `heartbeats_dropped`, `post_idle_drained`, `inbound_dropped`; `inbound_dropped` is
+  captured per-turn as a delta from `Client::inbound_dropped()`
+- **Client convenience methods:** `Client::config_get`, `Client::config_reload`,
+  `Client::daemon_shutdown` (previously only free functions in `helpers.rs`)
+
 ## 0.3.8 — 2026-08-23
 
 ### Added

@@ -79,6 +79,8 @@ pub struct SendInputOptions {
     pub clarification_answer: bool,
     /// Clarification answers payload.
     pub clarification_answers: Option<Value>,
+    /// Interaction mode (`agent`|`ask`).
+    pub interaction_mode: Option<String>,
 }
 
 type RpcWaiter = oneshot::Sender<std::result::Result<Value, DaemonError>>;
@@ -666,6 +668,9 @@ impl Client {
         if let Some(v) = opts.clarification_answers {
             params.insert("clarification_answers".into(), v);
         }
+        if let Some(v) = opts.interaction_mode {
+            params.insert("interaction_mode".into(), json!(v));
+        }
         self.notify("loop_input", params).await
     }
 
@@ -1074,12 +1079,50 @@ impl Client {
             .await
     }
 
+    /// `config_get` — fetch a daemon config section (empty `section` → all).
+    pub async fn config_get(&self, section: &str) -> Result<Map<String, Value>> {
+        let mut params = Map::new();
+        if !section.is_empty() {
+            params.insert("section".into(), json!(section));
+        }
+        self.request("config_get", params, Duration::from_secs(15))
+            .await
+    }
+
+    /// `config_reload` — ask the daemon to reload its configuration.
+    pub async fn config_reload(&self) -> Result<Map<String, Value>> {
+        self.request("config_reload", Map::new(), Duration::from_secs(5))
+            .await
+    }
+
+    /// `daemon_shutdown` — request graceful daemon shutdown.
+    ///
+    /// Returns `Ok(())` when the daemon acknowledges the shutdown request.
+    pub async fn daemon_shutdown(&self) -> Result<()> {
+        let resp = self
+            .request("daemon_shutdown", Map::new(), Duration::from_secs(10))
+            .await?;
+        let status = resp.get("status").and_then(|v| v.as_str()).unwrap_or("");
+        if status != "acknowledged" && !status.is_empty() {
+            return Err(Error::msg(format!("unexpected shutdown status: {status}")));
+        }
+        Ok(())
+    }
+
     /// `invoke_skill` on this connection (stream socket for turn enqueue).
-    pub async fn invoke_skill(&self, skill: &str, args: &str) -> Result<Map<String, Value>> {
+    pub async fn invoke_skill(
+        &self,
+        skill: &str,
+        args: &str,
+        interaction_mode: Option<&str>,
+    ) -> Result<Map<String, Value>> {
         let mut params = Map::new();
         params.insert("skill".into(), json!(skill));
         if !args.is_empty() {
             params.insert("args".into(), json!(args));
+        }
+        if let Some(v) = interaction_mode {
+            params.insert("interaction_mode".into(), json!(v));
         }
         self.request("invoke_skill", params, Duration::from_secs(120))
             .await

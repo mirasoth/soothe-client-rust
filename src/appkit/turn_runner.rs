@@ -80,6 +80,8 @@ pub struct InputOpts {
     pub response_schema_name: Option<String>,
     /// Strict schema.
     pub response_schema_strict: Option<bool>,
+    /// Interaction mode (`agent`|`ask`).
+    pub interaction_mode: Option<String>,
 }
 
 type OnCompleteFn = Arc<dyn Fn(&str, &str, &str, &str, i64) + Send + Sync>;
@@ -298,6 +300,7 @@ impl<S: LoopSessionStore + 'static> TurnRunner<S> {
             response_schema: opts.as_ref().and_then(|o| o.response_schema.clone()),
             response_schema_name: opts.as_ref().and_then(|o| o.response_schema_name.clone()),
             response_schema_strict: opts.as_ref().and_then(|o| o.response_schema_strict),
+            interaction_mode: opts.as_ref().and_then(|o| o.interaction_mode.clone()),
             attachments: atts.clone(),
             ..Default::default()
         };
