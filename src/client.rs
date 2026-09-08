@@ -408,8 +408,8 @@ impl Client {
 
     /// Re-dial and re-handshake after a connection drop.
     ///
-    /// Does not re-establish loop subscriptions; follow with
-    /// [`Self::reattach_and_probe`] to resume a loop session.
+    /// Does not re-establish loop subscriptions; follow with `reattach_and_probe`
+    /// to resume a loop session.
     pub async fn reconnect(&self) -> Result<()> {
         {
             let mut tx = self.shared.write_tx.lock().await;
@@ -470,8 +470,7 @@ impl Client {
         }
     }
 
-    /// Request with a payload map that may include a `type` field as the method name
-    /// (Go `RequestResponse` parity).
+    /// Request with a payload map whose `type` field names the method.
     pub async fn request_response(
         &self,
         payload: Map<String, Value>,
@@ -568,10 +567,9 @@ impl Client {
         labels
     }
 
-    /// Re-queue an event ahead of subsequent [`Client::read_event`] calls.
+    /// Re-queue an event ahead of subsequent `read_event` calls.
     ///
-    /// Applies priority-aware drop when the pending buffer is full
-    /// (Go `PushPendingEvent` parity).
+    /// Applies priority-aware drop when the pending buffer is full.
     pub async fn push_pending_event(&self, ev: Value) {
         if !ev.is_object() {
             return;
@@ -581,23 +579,18 @@ impl Client {
         self.shared.inbound_notify.notify_one();
     }
 
-    /// Override the pending-event cap at runtime (Go `SetInboundMaxSize` parity).
+    /// Override the pending-event cap at runtime.
     pub fn set_inbound_max_size(&self, n: usize) {
         if n > 0 {
             self.shared.max_inbound.store(n, Ordering::SeqCst);
         }
     }
 
-    /// Spawn a background reader that streams inbound frames on a channel.
+    /// Background reader that streams inbound frames on a channel.
     ///
-    /// The channel closes when the connection ends or the client disconnects.
-    /// Solicited frames (RPC responses / subscription confirmations) are still
-    /// routed through the internal mux and are NOT forwarded on this channel;
-    /// only unsolicited app events are forwarded (Go `ReceiveMessages` parity).
-    ///
-    /// Heartbeat, ping/pong, and delivery-ack handling are still performed by
-    /// the internal reader task; this method exposes the already-routed inbound
-    /// queue as a channel for consumers that prefer pull-style streaming.
+    /// The channel closes when the connection ends. Solicited frames (RPC
+    /// responses / subscription confirmations) stay on the internal mux and
+    /// are not forwarded; only unsolicited app events are forwarded.
     pub fn receive_messages(&self, buffer: usize) -> mpsc::Receiver<Value> {
         let (tx, rx) = mpsc::channel(if buffer == 0 { 100 } else { buffer });
         let shared = self.shared.clone();
@@ -722,8 +715,8 @@ impl Client {
             .await
     }
 
-    /// `loop_execution_state_fetch` — focused execution-progress snapshot
-    /// (plan, step_index, iteration, status) for the loop's bound checkpoint thread.
+    /// `loop_execution_state_fetch` — execution-progress snapshot
+    /// (plan, step_index, iteration, status) for the bound checkpoint thread.
     pub async fn loop_execution_state_fetch(&self, loop_id: &str) -> Result<Map<String, Value>> {
         let mut params = Map::new();
         params.insert("loop_id".into(), json!(loop_id));
@@ -1144,8 +1137,6 @@ impl Client {
     // ----- Structured command shorthands (Go `CommandRequest` parity) -----
 
     /// `command_request` RPC (structured slash command).
-    ///
-    /// Mirrors Go `CommandRequest`. Default timeout 30s.
     pub async fn command_request(
         &self,
         command: &str,
@@ -1227,11 +1218,11 @@ impl Client {
 
     // ----- Daemon readiness -----
 
-    /// Wait for the protocol-1 `connection_ack` handshake to report `readiness_state == "ready"`.
+    /// Wait for the `connection_ack` handshake to report `readiness_state == "ready"`.
     ///
-    /// Returns immediately when the handshake already completed during [`Client::connect`];
-    /// otherwise polls inbound frames for an out-of-band `connection_ack`.
-    /// Default timeout 10s (Go `WaitForDaemonReady` parity).
+    /// Returns immediately when the handshake already completed during
+    /// `connect`; otherwise polls inbound frames for an out-of-band
+    /// `connection_ack`.
     pub async fn wait_for_daemon_ready(&self, timeout: Duration) -> Result<Map<String, Value>> {
         let timeout = if timeout.is_zero() {
             Duration::from_secs(10)

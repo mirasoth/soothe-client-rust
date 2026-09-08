@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Map};
+use soothe_client::appkit::DaemonSession;
 use soothe_client::appkit::{
     compact_attachments, default_thinking_step_events, extract_thinking_step,
     should_drop_stream_chunk_early, CancelFn, ChatEventTerminal, ClassifierConfig, EventClassifier,
@@ -191,6 +192,30 @@ fn classifier_phase_not_in_config() {
     });
     let r = cl.classify(&goal, "");
     assert_ne!(r.terminal, ChatEventTerminal::DeliverableComplete);
+}
+
+#[tokio::test]
+async fn daemon_session_set_clarification_mode_no_loop_returns_false() {
+    // No active loop session → matches Python's `if not self._loop_id: return False`.
+    // This exercises the early-return guard without needing a live daemon.
+    let session = DaemonSession::new("ws://127.0.0.1:8765", None);
+    let applied = session
+        .set_clarification_mode("manual", None)
+        .await
+        .expect("no active loop should not error");
+    assert!(!applied, "expected false when no loop_id is set");
+}
+
+#[tokio::test]
+async fn daemon_session_set_clarification_mode_with_interaction_mode_no_loop() {
+    // interaction_mode is forwarded only after the loop_id guard; with no loop
+    // we still return false without touching the network.
+    let session = DaemonSession::new("ws://127.0.0.1:8765", None);
+    let applied = session
+        .set_clarification_mode("auto", Some("bypass"))
+        .await
+        .expect("no active loop should not error");
+    assert!(!applied, "expected false when no loop_id is set");
 }
 
 #[test]

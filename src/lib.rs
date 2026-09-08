@@ -1,14 +1,10 @@
 //! Soothe WebSocket client for talking to a running soothe-daemon.
 //!
-//! Public surface mirrors Python / Go / TypeScript RFC-629 tiers:
-//!
-//! ```text
-//! Need                         → Entry point
-//! One conversation, stream     → appkit::DaemonSession
-//! Jobs / cron one-shots        → CommandClient
-//! Raw protocol / custom        → Client
-//! Multi-user HTTP backend      → appkit::ConnectionPool + TurnRunner
-//! ```
+//! Entry points by need:
+//! - One conversation, stream → `appkit::DaemonSession`
+//! - Jobs / cron one-shots → `CommandClient`
+//! - Raw protocol / custom → `Client`
+//! - Multi-user HTTP backend → `appkit::ConnectionPool`
 
 #![deny(missing_docs)]
 #![allow(clippy::result_large_err)]

@@ -18,10 +18,10 @@ use crate::turn_boundary::{
 use super::chunk_filter::should_drop_stream_chunk_early;
 use super::observability::TurnEventStats;
 
-/// Default post-idle drain window (Go `DefaultPostIdleDrain`).
+/// Default post-idle drain window.
 pub const DEFAULT_POST_IDLE_DRAIN: Duration = Duration::from_millis(500);
 
-/// Filters non-actionable stream chunks before yield (Go `EarlyDropFn`).
+/// Filters non-actionable stream chunks before yield.
 pub type EarlyDropFn = Arc<dyn Fn(&[Value], &str, &Value) -> bool + Send + Sync>;
 
 /// Options for constructing a DaemonSession.
@@ -285,6 +285,43 @@ impl DaemonSession {
         self.rpc_client
             .invoke_skill(skill, args, interaction_mode)
             .await
+    }
+
+    /// Hot-swap the clarification mode on the running goal.
+    ///
+    /// Sends `loop_set_clarification_mode` with `mode` (`auto`|`manual`) and an
+    /// optional `interaction_mode` (`bypass` swaps to the bypass graph; `None`
+    /// keeps the default graph). Returns `true` when the swap landed on a live
+    /// goal, `false` when no goal is currently running.
+    pub async fn set_clarification_mode(
+        &self,
+        mode: &str,
+        interaction_mode: Option<&str>,
+    ) -> Result<bool> {
+        let loop_id = self.loop_id().await;
+        if loop_id.is_empty() {
+            return Ok(false);
+        }
+        let mut params = Map::new();
+        params.insert("loop_id".into(), json!(loop_id));
+        params.insert("mode".into(), json!(mode));
+        if let Some(im) = interaction_mode {
+            params.insert("interaction_mode".into(), json!(im));
+        }
+        self.ensure_rpc_connected().await?;
+        let result = self
+            .rpc_client
+            .request(
+                "loop_set_clarification_mode",
+                params,
+                Duration::from_secs(5),
+            )
+            .await?;
+        let applied = result
+            .get("applied")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        Ok(applied)
     }
 
     /// Stream turn chunks until idle / stream.end.

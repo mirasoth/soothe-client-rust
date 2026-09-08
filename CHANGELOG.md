@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.10 — 2026-09-08
+
+### Added
+- **`DaemonSession::set_clarification_mode(mode, interaction_mode)`** (Python parity):
+  hot-swap the clarification mode on a running goal. Sends the
+  `loop_set_clarification_mode` RPC on the sidecar socket with `loop_id` and
+  `mode` (`auto`|`manual`); inserts `interaction_mode` only when `Some`
+  (`bypass` swaps to the bypass graph; `None` keeps the default). Returns
+  `true` when the swap landed on a live goal, `false` when no goal is running
+  or no loop is active on the session.
+
 ## 0.3.9 — 2026-08-23
 
 ### Added

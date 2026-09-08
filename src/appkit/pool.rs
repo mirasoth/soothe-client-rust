@@ -1,4 +1,4 @@
-//! Connection pool mapping application sessions to daemon loops (Go `ConnectionPool` parity).
+//! Connection pool mapping application sessions to daemon loops.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -54,7 +54,7 @@ pub struct PoolStats {
 pub struct PooledConn {
     /// Internal slot id.
     pub slot_id: u32,
-    /// Application session id (`app_key` in Go).
+    /// Application session id.
     pub session_id: String,
     /// Bound StrangeLoop id.
     pub loop_id: Mutex<String>,
@@ -62,7 +62,7 @@ pub struct PooledConn {
     pub workspace_id: String,
     /// Underlying protocol client.
     pub client: Client,
-    /// Forwarded event stream (`ReceiveMessages` → mpsc); `None` until `start_reader`.
+    /// Forwarded event stream (`mpsc`); `None` until `start_reader`.
     pub event_rx: Mutex<Option<tokio::sync::mpsc::Receiver<Value>>>,
     /// Whether the forwarder task is still running.
     pub reader_live: AtomicBool,
@@ -72,7 +72,7 @@ pub struct PooledConn {
 }
 
 impl PooledConn {
-    /// Loop id (Go `getLoopID`).
+    /// Loop id.
     pub async fn get_loop_id(&self) -> String {
         self.loop_id.lock().await.clone()
     }
@@ -82,7 +82,7 @@ impl PooledConn {
         self.client.is_connected() && !Self::client_disconnect_notified(&self.client).await
     }
 
-    /// Whether `ReceiveMessages` is still feeding `event_rx`.
+    /// Whether the event forwarder is still feeding `event_rx`.
     pub async fn event_stream_live(&self) -> bool {
         let has_rx = self.event_rx.lock().await.is_some();
         has_rx && self.reader_live.load(Ordering::SeqCst)
@@ -126,7 +126,7 @@ pub struct ConnectionPool<S: LoopSessionStore> {
 }
 
 impl<S: LoopSessionStore + 'static> ConnectionPool<S> {
-    /// Construct a pool for `daemon_url`. `cfg` defaults via [`PoolConfig::default`].
+    /// Construct a pool for `daemon_url`.
     pub fn new(daemon_url: impl Into<String>, store: Arc<S>, cfg: Option<PoolConfig>) -> Self {
         let cfg = cfg.unwrap_or_default();
         let pool_size = if cfg.pool_size == 0 {
@@ -193,8 +193,8 @@ impl<S: LoopSessionStore + 'static> ConnectionPool<S> {
 
     /// Acquire a live connection for `session_id`, bootstrapping or reattaching as needed.
     ///
-    /// The caller must call [`Self::release`] when the session connection should be torn down
-    /// (TurnRunner keeps the slot active across turns on the same session).
+    /// The caller must call `release` when the session connection should be torn
+    /// down (TurnRunner keeps the slot active across turns on the same session).
     pub async fn acquire(
         &self,
         session_id: &str,
@@ -463,7 +463,7 @@ impl<S: LoopSessionStore + 'static> ConnectionPool<S> {
         Ok(())
     }
 
-    /// Launch `ReceiveMessages(256)` forwarder; detached from caller cancellation.
+    /// Launch the event forwarder; detached from caller cancellation.
     async fn start_reader(&self, conn: &PooledConnHandle) {
         if let Some(handle) = conn.reader_task.lock().await.take() {
             handle.abort();
@@ -520,7 +520,7 @@ impl From<ErrPoolExhausted> for Error {
     }
 }
 
-/// Build a protocol-1 `loop_input` notification envelope (Go `InputMessageForLoop`).
+/// Build a protocol-1 `loop_input` notification envelope.
 pub fn input_message_for_loop(
     text: &str,
     loop_id: &str,
