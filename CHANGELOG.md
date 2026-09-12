@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.11 — 2026-09-13
+
+### Added
+- **`autopilot_rail_id` support** (Python parity): `SendInputOptions.autopilot_rail_id`,
+  `SendTurnOptions.autopilot_rail_id`; threaded through `Client::send_input` and
+  `DaemonSession::send_turn` — pins a turn to a specific autopilot rail when `Some`
+
 ## 0.3.10 — 2026-09-08
 
 ### Added

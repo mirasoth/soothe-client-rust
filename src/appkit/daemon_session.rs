@@ -83,6 +83,8 @@ pub struct SendTurnOptions {
     pub intent_hint: Option<String>,
     /// Interaction mode (`agent`|`ask`).
     pub interaction_mode: Option<String>,
+    /// Autopilot rail id (pins the turn to a specific autopilot rail).
+    pub autopilot_rail_id: Option<String>,
 }
 
 /// One streamed turn chunk.
@@ -237,6 +239,7 @@ impl DaemonSession {
             clarification_answer: opts.clarification_answer,
             intent_hint: opts.intent_hint,
             interaction_mode: opts.interaction_mode,
+            autopilot_rail_id: opts.autopilot_rail_id,
             ..Default::default()
         };
         self.client.send_input(text, input).await

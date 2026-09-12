@@ -81,6 +81,8 @@ pub struct SendInputOptions {
     pub clarification_answers: Option<Value>,
     /// Interaction mode (`agent`|`ask`).
     pub interaction_mode: Option<String>,
+    /// Autopilot rail id (pins the turn to a specific autopilot rail).
+    pub autopilot_rail_id: Option<String>,
 }
 
 type RpcWaiter = oneshot::Sender<std::result::Result<Value, DaemonError>>;
@@ -663,6 +665,9 @@ impl Client {
         }
         if let Some(v) = opts.interaction_mode {
             params.insert("interaction_mode".into(), json!(v));
+        }
+        if let Some(v) = opts.autopilot_rail_id {
+            params.insert("autopilot_rail_id".into(), json!(v));
         }
         self.notify("loop_input", params).await
     }
