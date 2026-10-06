@@ -81,7 +81,7 @@ pub const EVENT_STREAM_TOOL_CALL_UPDATE: &str = "soothe.stream.tool_call.update"
 pub const EVENT_TOOL_CALL_UPDATES_BATCH: &str = "tool_call_updates_batch";
 
 // ---------------------------------------------------------------------------
-// StrangeLoop / branch / protocol / output / autopilot / error
+// StrangeLoop / branch / protocol / output / error
 // ---------------------------------------------------------------------------
 
 /// Strange loop started.
@@ -114,23 +114,6 @@ pub const EVENT_MESSAGE_SENT: &str = "soothe.protocol.message.sent";
 
 /// Final report.
 pub const EVENT_FINAL_REPORT: &str = "soothe.output.autonomous.final_report.reported";
-
-/// Autopilot status changed.
-pub const EVENT_AUTOPILOT_STATUS_CHANGED: &str = "soothe.system.autopilot.status.changed";
-/// Autopilot goal created.
-pub const EVENT_AUTOPILOT_GOAL_CREATED: &str = "soothe.system.autopilot.goal.created";
-/// Autopilot goal progress.
-pub const EVENT_AUTOPILOT_GOAL_PROGRESS: &str = "soothe.system.autopilot.goal.reported";
-/// Autopilot goal completed.
-pub const EVENT_AUTOPILOT_GOAL_COMPLETED: &str = "soothe.system.autopilot.goal.completed";
-/// Autopilot goal suspended.
-pub const EVENT_AUTOPILOT_GOAL_SUSPENDED: &str = "soothe.system.autopilot.goal.suspended";
-/// Autopilot goal blocked.
-pub const EVENT_AUTOPILOT_GOAL_BLOCKED: &str = "soothe.system.autopilot.goal.blocked";
-/// Autopilot dreaming entered.
-pub const EVENT_AUTOPILOT_DREAMING_ENTERED: &str = "soothe.system.autopilot.dreaming.started";
-/// Autopilot dreaming exited.
-pub const EVENT_AUTOPILOT_DREAMING_EXITED: &str = "soothe.system.autopilot.dreaming.completed";
 
 /// General failure.
 pub const EVENT_GENERAL_FAILED: &str = "soothe.error.general.failed";
@@ -178,7 +161,7 @@ fn classify_by_domain(domain: &str, full: &str) -> VerbosityTier {
         "protocol" => VerbosityTier::Detailed,
         "tool" => VerbosityTier::Internal,
         "subagent" => classify_subagent_event(full),
-        "autopilot" | "system" => VerbosityTier::Normal,
+        "system" => VerbosityTier::Normal,
         "output" | "error" => VerbosityTier::Quiet,
         _ => VerbosityTier::Normal,
     }
