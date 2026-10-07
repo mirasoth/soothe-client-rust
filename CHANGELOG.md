@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.12 — 2026-10-07
+
+### Removed
+- Drop autopilot system event constants from `events.rs` and their re-exports from `lib.rs`; simplify the verbosity classifier to drop the autopilot domain arm, aligning the Rust client with the autopilot cleansing.
+
 ## 0.3.11 — 2026-09-13
 
 ### Added
