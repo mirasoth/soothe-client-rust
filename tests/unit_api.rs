@@ -6,7 +6,7 @@ use soothe_client::appkit::{
 };
 use soothe_client::events::{
     classify_event_verbosity, parse_namespace, EVENT_DEEP_RESEARCH_COMPLETED,
-    EVENT_DEEP_RESEARCH_STARTED, EVENT_FINAL_REPORT, EVENT_TOOL_STARTED,
+    EVENT_DEEP_RESEARCH_STARTED, EVENT_GENERAL_FAILED, EVENT_TOOL_STARTED,
 };
 use soothe_client::intent_hints::TEXT_COMPLETION;
 use soothe_client::protocol::{
@@ -144,7 +144,7 @@ fn subagent_event_constants() {
 fn verbosity_and_namespace() {
     assert!(should_show(VerbosityTier::Quiet, VERBOSITY_QUIET));
     assert_eq!(
-        classify_event_verbosity(EVENT_FINAL_REPORT),
+        classify_event_verbosity(EVENT_GENERAL_FAILED),
         VerbosityTier::Quiet
     );
     assert_eq!(

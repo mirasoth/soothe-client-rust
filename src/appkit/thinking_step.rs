@@ -4,25 +4,19 @@ use std::collections::HashSet;
 
 use serde_json::Value;
 
-use crate::events::{
-    EVENT_GOAL_CREATED, EVENT_PLAN_BATCH_STARTED, EVENT_PLAN_CREATED, EVENT_TOOL_STARTED,
-};
+use crate::events::{EVENT_GOAL_CREATED, EVENT_PLAN_CREATED, EVENT_TOOL_STARTED};
 
 const MAX_THINKING_STEP_RUNES: usize = 280;
 
 /// Default thinking-step event allowlist (overridable via [`ClassifierConfig`](super::ClassifierConfig)).
 pub fn default_thinking_step_events() -> HashSet<String> {
     [
-        "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step.completed",
-        "soothe.cognition.plan.step.failed",
-        "soothe.lifecycle.iteration.started",
-        "soothe.agent.loop.step.started",
-        "soothe.agent.loop.started",
-        EVENT_PLAN_BATCH_STARTED,
         EVENT_PLAN_CREATED,
         EVENT_GOAL_CREATED,
         EVENT_TOOL_STARTED,
+        "soothe.cognition.strange_loop.step.started",
+        "soothe.cognition.strange_loop.step.queued",
+        "soothe.cognition.strange_loop.step.completed",
     ]
     .into_iter()
     .map(str::to_string)
@@ -47,26 +41,7 @@ pub fn extract_thinking_step(
     }
 
     let line = match event_type {
-        "soothe.cognition.plan.step.started" => format_plan_step_line(data, ""),
-        "soothe.cognition.plan.step.completed" => format_plan_step_line(data, "done"),
-        "soothe.cognition.plan.step.failed" => {
-            let step_id = str_field(data, &["step_id"]);
-            let err_msg = str_field(data, &["error"]);
-            match (step_id.as_str(), err_msg.as_str()) {
-                (s, e) if !s.is_empty() && !e.is_empty() => format!("Step {s} failed: {e}"),
-                (s, _) if !s.is_empty() => format!("Step {s} failed"),
-                (_, e) if !e.is_empty() => format!("Step failed: {e}"),
-                _ => String::new(),
-            }
-        }
-        "soothe.agent.loop.step.started" => format_agent_step_line(data, ""),
-        EVENT_PLAN_BATCH_STARTED => data
-            .get("parallel_count")
-            .and_then(|v| v.as_f64())
-            .filter(|n| *n > 0.0)
-            .map(|n| format!("Running {} steps in parallel", n as i64))
-            .unwrap_or_default(),
-        EVENT_PLAN_CREATED | "soothe.agent.loop.started" => {
+        EVENT_PLAN_CREATED => {
             let g = str_field(data, &["goal"]);
             if g.is_empty() {
                 String::new()
@@ -82,14 +57,6 @@ pub fn extract_thinking_step(
                 format!("Goal: {g}")
             }
         }
-        "soothe.lifecycle.iteration.started" => {
-            let g = str_field(data, &["goal_description"]);
-            if g.is_empty() {
-                String::new()
-            } else {
-                format!("Iteration: {g}")
-            }
-        }
         EVENT_TOOL_STARTED => {
             let name = str_field(data, &["tool_name", "name"]);
             if name.is_empty() {
@@ -98,6 +65,9 @@ pub fn extract_thinking_step(
                 format!("Tool: {name}")
             }
         }
+        "soothe.cognition.strange_loop.step.started" => format_step_line(data, ""),
+        "soothe.cognition.strange_loop.step.queued" => format_step_line(data, "queued"),
+        "soothe.cognition.strange_loop.step.completed" => format_step_line(data, "done"),
         _ => return None,
     };
 
@@ -118,29 +88,19 @@ fn truncate_thinking_step(line: String) -> Option<String> {
     }
 }
 
-fn format_plan_step_line(data: &serde_json::Map<String, Value>, suffix: &str) -> String {
+fn format_step_line(data: &serde_json::Map<String, Value>, suffix: &str) -> String {
     let step_id = str_field(data, &["step_id"]);
-    let desc = str_field(data, &["description"]);
-    match (step_id.as_str(), desc.as_str(), suffix) {
-        (s, _, suf) if !s.is_empty() && !suf.is_empty() => format!("Step {s}: {suf}"),
-        (s, d, _) if !s.is_empty() && !d.is_empty() => format!("Step {s}: {d}"),
-        (s, _, _) if !s.is_empty() => format!("Step {s}"),
-        (_, d, suf) if !d.is_empty() && !suf.is_empty() => format!("Step: {suf}"),
-        (_, d, _) if !d.is_empty() => format!("Step: {d}"),
-        (_, _, suf) if !suf.is_empty() => format!("Step: {suf}"),
+    let desc = str_field(data, &["description", "summary"]);
+    let body = match (step_id.as_str(), desc.as_str()) {
+        (s, d) if !s.is_empty() && !d.is_empty() => format!("Step {s}: {d}"),
+        (s, _) if !s.is_empty() => format!("Step {s}"),
+        (_, d) if !d.is_empty() => format!("Step: {d}"),
         _ => String::new(),
-    }
-}
-
-fn format_agent_step_line(data: &serde_json::Map<String, Value>, suffix: &str) -> String {
-    let step_id = str_field(data, &["step_id"]);
-    let desc = str_field(data, &["description"]);
-    match (step_id.as_str(), desc.as_str(), suffix) {
-        (s, d, _) if !s.is_empty() && !d.is_empty() => format!("Step {s}: {d}"),
-        (_, d, suf) if !d.is_empty() && !suf.is_empty() => format!("Step: {suf}"),
-        (_, d, _) if !d.is_empty() => format!("Step: {d}"),
-        (s, _, _) if !s.is_empty() => format!("Step {s}"),
-        _ => String::new(),
+    };
+    if body.is_empty() || suffix.is_empty() {
+        body
+    } else {
+        format!("{body} ({suffix})")
     }
 }
 

@@ -80,7 +80,7 @@ pub struct InputOpts {
     pub response_schema_name: Option<String>,
     /// Strict schema.
     pub response_schema_strict: Option<bool>,
-    /// Interaction mode (`agent`|`ask`).
+    /// Interaction mode (`agent`|`ask`|`plan`|`bypass`).
     pub interaction_mode: Option<String>,
 }
 

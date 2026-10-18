@@ -569,7 +569,7 @@ pub fn is_loop_assistant_phase(phase: &str) -> bool {
     matches!(
         phase,
         "goal_completion"
-            | "quiz"
+            | "goal_interrupted"
             | "autonomous_goal"
             | "text_completion"
             | "image_to_text"

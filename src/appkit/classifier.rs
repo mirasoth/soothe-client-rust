@@ -5,9 +5,7 @@ use std::fmt;
 
 use serde_json::Value;
 
-use crate::events::{
-    EVENT_FINAL_REPORT, EVENT_STREAM_TOOL_CALL_UPDATE, EVENT_TOOL_CALL_UPDATES_BATCH,
-};
+use crate::events::{EVENT_STREAM_TOOL_CALL_UPDATE, EVENT_TOOL_CALL_UPDATES_BATCH};
 use crate::intent_hints::DEFAULT_DELIVERABLE_PHASES;
 use crate::protocol::{unwrap_next, EventMessage};
 use crate::stream_terminal::{is_turn_end_custom_data, STREAM_END};
@@ -142,7 +140,6 @@ impl EventClassifier {
         match event_type {
             "status.idle" | "status.stopped" | STREAM_END | "idle_timeout" | "query_timeout"
             | "stream_closed" => true,
-            _ if event_type == EVENT_FINAL_REPORT => true,
             _ => {
                 if let Some(phase) = event_type.strip_prefix("soothe.protocol.message.") {
                     self.is_deliverable_loop_phase(phase)

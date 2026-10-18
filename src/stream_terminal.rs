@@ -11,6 +11,28 @@ use crate::protocol::as_str;
 /// Daemon turn-scoped stream end custom type.
 pub const STREAM_END: &str = "soothe.stream.end";
 
+/// Assistant wire frame field marking the end of an LLM synthesis stream.
+pub const STREAM_TERMINAL_FIELD: &str = "stream_terminal";
+
+/// True when a messages-mode wire body dict marks the end of an LLM stream
+/// (host stamps `stream_terminal: true` as an ack-required terminal marker).
+pub fn is_stream_terminal_wire_dict(msg: &Value) -> bool {
+    msg.as_object()
+        .is_some_and(|o| o.get(STREAM_TERMINAL_FIELD) == Some(&Value::Bool(true)))
+}
+
+/// True when a messages-mode `data` payload (single dict or pair array)
+/// carries the stream terminal marker.
+pub fn is_stream_terminal_data(data: &Value) -> bool {
+    match data {
+        Value::Array(items) => items
+            .first()
+            .map(is_stream_terminal_wire_dict)
+            .unwrap_or(false),
+        other => is_stream_terminal_wire_dict(other),
+    }
+}
+
 const STRANGE_LOOP_COMPLETED: &str = "soothe.cognition.strange_loop.completed";
 const PLAN_CREATED: &str = "soothe.cognition.plan.created";
 const STEP_STARTED: &str = "soothe.cognition.strange_loop.step.started";
@@ -154,12 +176,12 @@ fn inbound_needs_ack_from_event_shape(event: &Value) -> bool {
         return true;
     }
     if mode == "messages" {
-        if let Some(arr) = data.as_array() {
-            if let Some(body) = arr.first().and_then(|v| v.as_object()) {
-                let t = as_str(body.get("type").unwrap_or(&Value::Null));
-                return t == STREAM_END || t.contains("stream.end");
-            }
-        }
+        let body = match data {
+            Value::Array(items) => items.first().unwrap_or(&Value::Null),
+            other => other,
+        };
+        let t = as_str(body.get("type").unwrap_or(&Value::Null));
+        return t == STREAM_END || t.contains("stream.end") || is_stream_terminal_wire_dict(body);
     }
     false
 }
@@ -214,5 +236,38 @@ mod tests {
             "custom",
             &json!({"type": STREAM_END})
         ));
+    }
+
+    #[test]
+    fn stream_terminal_wire_dict() {
+        assert!(is_stream_terminal_wire_dict(&json!({"stream_terminal": true})));
+        assert!(!is_stream_terminal_wire_dict(&json!({"stream_terminal": false})));
+        assert!(!is_stream_terminal_wire_dict(&json!({})));
+    }
+
+    #[test]
+    fn stream_terminal_data_pair() {
+        assert!(is_stream_terminal_data(&json!([
+            {"stream_terminal": true, "chunk_position": "last"},
+            {}
+        ])));
+        assert!(is_stream_terminal_data(&json!({"stream_terminal": true})));
+        assert!(!is_stream_terminal_data(&json!([{"content": "hi"}])));
+    }
+
+    #[test]
+    fn ack_on_messages_stream_terminal() {
+        let frame = json!({
+            "type": "event",
+            "mode": "messages",
+            "data": [{"stream_terminal": true}]
+        });
+        assert!(inbound_needs_delivery_ack(&frame));
+        let plain = json!({
+            "type": "event",
+            "mode": "messages",
+            "data": [{"content": "hi"}]
+        });
+        assert!(!inbound_needs_delivery_ack(&plain));
     }
 }

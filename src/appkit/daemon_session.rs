@@ -81,7 +81,7 @@ pub struct SendTurnOptions {
     pub clarification_answer: bool,
     /// Intent hint.
     pub intent_hint: Option<String>,
-    /// Interaction mode (`agent`|`ask`).
+    /// Interaction mode (`agent`|`ask`|`plan`|`bypass`).
     pub interaction_mode: Option<String>,
     /// Autopilot rail id (pins the turn to a specific autopilot rail).
     pub autopilot_rail_id: Option<String>,
@@ -277,7 +277,7 @@ impl DaemonSession {
 
     /// Invoke a skill via the RPC sidecar socket.
     ///
-    /// `interaction_mode` (`agent`|`ask`) is forwarded to the daemon when set.
+    /// `interaction_mode` (`agent`|`ask`|`plan`|`bypass`) is forwarded to the daemon when set.
     pub async fn invoke_skill(
         &self,
         skill: &str,

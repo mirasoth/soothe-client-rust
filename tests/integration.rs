@@ -98,7 +98,7 @@ async fn integration_loop_new_list_get() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn integration_loop_tree_cards_history_messages_state() {
+async fn integration_loop_cards_history_messages_state() {
     common::with_deadline(async {
         let url = skip_if_no_daemon!();
         let client = common::connect_ready(&url).await;
@@ -108,10 +108,6 @@ async fn integration_loop_tree_cards_history_messages_state() {
         let created = client.loop_new(params).await.expect("loop_new");
         let loop_id = common::loop_id_from(&created).expect("loop_id");
 
-        match client.loop_tree(&loop_id, Some("json")).await {
-            Ok(v) => eprintln!("loop_tree ok: keys={:?}", v.keys().collect::<Vec<_>>()),
-            Err(e) => eprintln!("loop_tree soft-fail: {e}"),
-        }
         match client.loop_history_fetch(&loop_id).await {
             Ok(v) => eprintln!("loop_history ok: {v:?}"),
             Err(e) => eprintln!("loop_history soft-fail: {e}"),
@@ -277,13 +273,34 @@ async fn integration_jobs_create_status_cancel() {
         let created = client
             .job_create(
                 "Echo: rust integration smoke — done",
+                "auto",
                 Some(&dir.path().display().to_string()),
             )
             .await
             .expect("job_create");
-        let job_id = common::job_id_from(&created).expect("job_id");
-        let _ = client.job_status(&job_id).await.expect("status");
-        let _ = client.job_cancel(&job_id).await.expect("cancel");
+        // Loop-native submission: response carries loop_id + status=submitted.
+        let loop_id = created
+            .get("loop_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .expect("loop_id")
+            .to_string();
+        assert_eq!(
+            created.get("status").and_then(|v| v.as_str()),
+            Some("submitted")
+        );
+        // Job status is loop-native: query the loop returned by job_create.
+        let _ = client.request("loop_get", {
+            let mut p = Map::new();
+            p.insert("loop_id".into(), json!(loop_id));
+            p
+        }).await.expect("loop_get");
+        // Cancel: purge the loop created by this test.
+        let _ = client.request("loop_delete", {
+            let mut p = Map::new();
+            p.insert("loop_id".into(), json!(loop_id));
+            p
+        }).await;
     })
     .await;
 }
@@ -297,6 +314,7 @@ async fn integration_jobs_pause_resume_dag_guidance() {
         let created = match client
             .job_create(
                 "Count slowly then finish",
+                "auto",
                 Some(&dir.path().display().to_string()),
             )
             .await
@@ -307,114 +325,42 @@ async fn integration_jobs_pause_resume_dag_guidance() {
                 return;
             }
         };
-        let Some(job_id) = common::job_id_from(&created) else {
-            eprintln!("no job_id in {created:?}");
+        // Loop-native submission: response carries loop_id + status=submitted.
+        let Some(loop_id) = created.get("loop_id").and_then(|v| v.as_str()) else {
+            eprintln!("no loop_id in {created:?}");
             return;
         };
+        let loop_id = loop_id.to_string();
 
-        match client.job_pause(&job_id).await {
+        // Legacy job_pause/resume/dag/guidance are service-unavailable stubs on
+        // v1.2.0 daemons; soft-fail logging documents that.
+        match client.job_pause(&loop_id).await {
             Ok(v) => eprintln!("job_pause: {v:?}"),
-            Err(e) => eprintln!("job_pause soft-fail: {e}"),
+            Err(e) => eprintln!("job_pause soft-fail (expected on v1.2.0): {e}"),
         }
-        match client.job_resume(&job_id).await {
+        match client.job_resume(&loop_id).await {
             Ok(v) => eprintln!("job_resume: {v:?}"),
-            Err(e) => eprintln!("job_resume soft-fail: {e}"),
+            Err(e) => eprintln!("job_resume soft-fail (expected on v1.2.0): {e}"),
         }
-        match client.job_dag(&job_id).await {
+        match client.job_dag(&loop_id).await {
             Ok(v) => eprintln!("job_dag: {v:?}"),
-            Err(e) => eprintln!("job_dag soft-fail: {e}"),
+            Err(e) => eprintln!("job_dag soft-fail (expected on v1.2.0): {e}"),
         }
         match client
-            .job_guidance(&job_id, "Prefer a short answer", None)
+            .job_guidance(&loop_id, "Prefer a short answer", None)
             .await
         {
             Ok(v) => eprintln!("job_guidance: {v:?}"),
-            Err(e) => eprintln!("job_guidance soft-fail: {e}"),
+            Err(e) => eprintln!("job_guidance soft-fail (expected on v1.2.0): {e}"),
         }
-        let _ = client.job_cancel(&job_id).await;
+        let _ = client.request("loop_delete", {
+            let mut p = Map::new();
+            p.insert("loop_id".into(), json!(loop_id));
+            p
+        }).await;
     })
     .await;
 }
-
-// ---------------------------------------------------------------------------
-// Cron + Autopilot
-// ---------------------------------------------------------------------------
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn integration_cron_add_list_show_cancel() {
-    common::with_deadline(async {
-        let url = skip_if_no_daemon!();
-        let client = AsyncCommandClient::new(&url).with_timeout(Duration::from_secs(15));
-        let added = match client
-            .cron_add("every day at 03:00 say hello from rust-int", Some(0))
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("cron_add soft-fail: {e}");
-                return;
-            }
-        };
-        eprintln!("cron_add: {added:?}");
-        let job_id = added
-            .get("job")
-            .and_then(|j| j.get("job_id").or_else(|| j.get("id")))
-            .and_then(|v| v.as_str())
-            .or_else(|| added.get("job_id").and_then(|v| v.as_str()))
-            .map(|s| s.to_string());
-
-        match client.cron_list(None).await {
-            Ok(v) => eprintln!("cron_list: {v:?}"),
-            Err(e) => eprintln!("cron_list soft-fail: {e}"),
-        }
-        if let Some(id) = job_id {
-            match client.cron_show(&id).await {
-                Ok(v) => eprintln!("cron_show: {v:?}"),
-                Err(e) => eprintln!("cron_show soft-fail: {e}"),
-            }
-            match client.cron_cancel(&id).await {
-                Ok(v) => eprintln!("cron_cancel: {v:?}"),
-                Err(e) => eprintln!("cron_cancel soft-fail: {e}"),
-            }
-        }
-    })
-    .await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn integration_autopilot_status_list_subscribe() {
-    common::with_deadline(async {
-        let url = skip_if_no_daemon!();
-        let cmd = AsyncCommandClient::new(&url).with_timeout(Duration::from_secs(15));
-        match cmd.autopilot_status().await {
-            Ok(v) => eprintln!("autopilot_status: {v:?}"),
-            Err(e) => eprintln!("autopilot_status soft-fail: {e}"),
-        }
-        match cmd.autopilot_list_goals().await {
-            Ok(v) => eprintln!("autopilot_list_goals: {v:?}"),
-            Err(e) => eprintln!("autopilot_list_goals soft-fail: {e}"),
-        }
-        match cmd.autopilot_list_jobs().await {
-            Ok(v) => eprintln!("autopilot_list_jobs: {v:?}"),
-            Err(e) => eprintln!("autopilot_list_jobs soft-fail: {e}"),
-        }
-
-        let client = common::connect_ready(&url).await;
-        match client.autopilot_subscribe().await {
-            Ok(sub) => {
-                eprintln!("autopilot_subscribe: {sub}");
-                let _ = client.autopilot_unsubscribe(&sub).await;
-            }
-            Err(e) => eprintln!("autopilot_subscribe soft-fail: {e}"),
-        }
-        client.close().await.ok();
-    })
-    .await;
-}
-
-// ---------------------------------------------------------------------------
-// Fire-and-forget send_* + pool
-// ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn integration_send_methods_smoke() {

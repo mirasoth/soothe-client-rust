@@ -1,4 +1,4 @@
-//! Ephemeral command clients for jobs / cron / autopilot one-shots.
+//! Ephemeral command clients for jobs / cron one-shots.
 
 use std::time::Duration;
 
@@ -57,14 +57,22 @@ impl AsyncCommandClient {
         self.rpc(method, params).await
     }
 
-    /// `job_create`.
+    /// `job_create`. `rail_id` is required (loop-native submission path).
     pub async fn job_create(
         &self,
         goal: &str,
+        rail_id: &str,
         workspace: Option<&str>,
     ) -> Result<Map<String, Value>> {
+        if goal.trim().is_empty() {
+            return Err(crate::errors::Error::msg("goal is required"));
+        }
+        if rail_id.trim().is_empty() {
+            return Err(crate::errors::Error::msg("rail_id is required"));
+        }
         let mut params = Map::new();
         params.insert("goal".into(), json!(goal));
+        params.insert("rail_id".into(), json!(rail_id));
         if let Some(ws) = workspace {
             params.insert("workspace".into(), json!(ws));
         }
@@ -120,87 +128,6 @@ impl AsyncCommandClient {
             params.insert("goal_id".into(), json!(g));
         }
         self.rpc("job_guidance", params).await
-    }
-
-    /// `autopilot_status`.
-    pub async fn autopilot_status(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_status", Map::new()).await
-    }
-
-    /// `autopilot_submit`.
-    pub async fn autopilot_submit(
-        &self,
-        description: &str,
-        priority: i32,
-        workspace: Option<&str>,
-    ) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("description".into(), json!(description));
-        params.insert("priority".into(), json!(priority));
-        if let Some(ws) = workspace {
-            params.insert("workspace".into(), json!(ws));
-        }
-        self.rpc("autopilot_submit", params).await
-    }
-
-    /// `autopilot_list_goals`.
-    pub async fn autopilot_list_goals(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_list_goals", Map::new()).await
-    }
-
-    /// `autopilot_get_goal`.
-    pub async fn autopilot_get_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.rpc("autopilot_get_goal", params).await
-    }
-
-    /// `autopilot_cancel_goal`.
-    pub async fn autopilot_cancel_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.rpc("autopilot_cancel_goal", params).await
-    }
-
-    /// `autopilot_cancel_all`.
-    pub async fn autopilot_cancel_all(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_cancel_all", Map::new()).await
-    }
-
-    /// `autopilot_wake`.
-    pub async fn autopilot_wake(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_wake", Map::new()).await
-    }
-
-    /// `autopilot_dream`.
-    pub async fn autopilot_dream(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_dream", Map::new()).await
-    }
-
-    /// `autopilot_resume`.
-    pub async fn autopilot_resume(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.rpc("autopilot_resume", params).await
-    }
-
-    /// `autopilot_list_jobs`.
-    pub async fn autopilot_list_jobs(&self) -> Result<Map<String, Value>> {
-        self.rpc("autopilot_list_jobs", Map::new()).await
-    }
-
-    /// `autopilot_get_job`.
-    pub async fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("job_id".into(), json!(job_id));
-        self.rpc("autopilot_get_job", params).await
-    }
-
-    /// `autopilot_top` — jobs → goals → loops snapshot for CLI top.
-    pub async fn autopilot_top(&self, include_terminal: bool) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("include_terminal".into(), json!(include_terminal));
-        self.rpc("autopilot_top", params).await
     }
 
     /// `cron_add` (normalized to `{"job": {...}}` when possible).
@@ -282,9 +209,14 @@ impl CommandClient {
         }
     }
 
-    /// `job_create`.
-    pub fn job_create(&self, goal: &str, workspace: Option<&str>) -> Result<Map<String, Value>> {
-        self.block(self.inner.job_create(goal, workspace))
+    /// `job_create`. `rail_id` is required (loop-native submission path).
+    pub fn job_create(
+        &self,
+        goal: &str,
+        rail_id: &str,
+        workspace: Option<&str>,
+    ) -> Result<Map<String, Value>> {
+        self.block(self.inner.job_create(goal, rail_id, workspace))
     }
 
     /// `job_status`.
@@ -320,74 +252,6 @@ impl CommandClient {
         goal_id: Option<&str>,
     ) -> Result<Map<String, Value>> {
         self.block(self.inner.job_guidance(job_id, content, goal_id))
-    }
-
-    /// `autopilot_status`.
-    pub fn autopilot_status(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_status())
-    }
-
-    /// `autopilot_submit`.
-    pub fn autopilot_submit(
-        &self,
-        description: &str,
-        priority: i32,
-        workspace: Option<&str>,
-    ) -> Result<Map<String, Value>> {
-        self.block(
-            self.inner
-                .autopilot_submit(description, priority, workspace),
-        )
-    }
-
-    /// `autopilot_list_goals`.
-    pub fn autopilot_list_goals(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_list_goals())
-    }
-
-    /// `autopilot_get_goal`.
-    pub fn autopilot_get_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_get_goal(goal_id))
-    }
-
-    /// `autopilot_cancel_goal`.
-    pub fn autopilot_cancel_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_cancel_goal(goal_id))
-    }
-
-    /// `autopilot_cancel_all`.
-    pub fn autopilot_cancel_all(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_cancel_all())
-    }
-
-    /// `autopilot_wake`.
-    pub fn autopilot_wake(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_wake())
-    }
-
-    /// `autopilot_dream`.
-    pub fn autopilot_dream(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_dream())
-    }
-
-    /// `autopilot_resume`.
-    pub fn autopilot_resume(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_resume(goal_id))
-    }
-
-    /// `autopilot_list_jobs`.
-    pub fn autopilot_list_jobs(&self) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_list_jobs())
-    }
-
-    /// `autopilot_get_job`.
-    pub fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_get_job(job_id))
-    }
-
-    /// `autopilot_top` — jobs → goals → loops snapshot for CLI top.
-    pub fn autopilot_top(&self, include_terminal: bool) -> Result<Map<String, Value>> {
-        self.block(self.inner.autopilot_top(include_terminal))
     }
 
     /// `cron_add`.

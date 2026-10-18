@@ -11,8 +11,6 @@ use crate::verbosity::VerbosityTier;
 
 /// Plan created.
 pub const EVENT_PLAN_CREATED: &str = "soothe.cognition.plan.created";
-/// Plan batch started.
-pub const EVENT_PLAN_BATCH_STARTED: &str = "soothe.cognition.plan.batch.started";
 /// Plan reflected.
 pub const EVENT_PLAN_REFLECTED: &str = "soothe.cognition.plan.reflected";
 
@@ -68,12 +66,12 @@ pub const EVENT_CARD_REPLAY_BEGIN: &str = "soothe.card.replay.begin";
 /// Card replay end.
 pub const EVENT_CARD_REPLAY_END: &str = "soothe.card.replay.end";
 
-/// Tool started.
-pub const EVENT_TOOL_STARTED: &str = "soothe.tool.execution.started";
-/// Tool completed.
-pub const EVENT_TOOL_COMPLETED: &str = "soothe.tool.execution.completed";
+/// Tool invocation started.
+pub const EVENT_TOOL_STARTED: &str = "soothe.tool.invocation.started";
+/// Tool invocation completed.
+pub const EVENT_TOOL_COMPLETED: &str = "soothe.tool.invocation.completed";
 /// Tool error.
-pub const EVENT_TOOL_ERROR: &str = "soothe.tool.execution.error";
+pub const EVENT_TOOL_ERROR: &str = "soothe.error.tool";
 
 /// Stream tool call update.
 pub const EVENT_STREAM_TOOL_CALL_UPDATE: &str = "soothe.stream.tool_call.update";
@@ -106,14 +104,6 @@ pub const EVENT_STRANGE_LOOP_CONTEXT_COMPACTED: &str =
 pub const EVENT_BRANCH_CREATED: &str = "soothe.cognition.branch.created";
 /// Branch retry started.
 pub const EVENT_BRANCH_RETRY_STARTED: &str = "soothe.cognition.branch.retry.started";
-
-/// Message received.
-pub const EVENT_MESSAGE_RECEIVED: &str = "soothe.protocol.message.received";
-/// Message sent.
-pub const EVENT_MESSAGE_SENT: &str = "soothe.protocol.message.sent";
-
-/// Final report.
-pub const EVENT_FINAL_REPORT: &str = "soothe.output.autonomous.final_report.reported";
 
 /// General failure.
 pub const EVENT_GENERAL_FAILED: &str = "soothe.error.general.failed";
@@ -178,11 +168,8 @@ fn classify_subagent_event(full: &str) -> VerbosityTier {
 }
 
 fn classify_by_event_type_string(event_type: &str) -> VerbosityTier {
-    if event_type == EVENT_FINAL_REPORT || event_type == EVENT_GENERAL_FAILED {
+    if event_type == EVENT_GENERAL_FAILED {
         return VerbosityTier::Quiet;
-    }
-    if event_type == EVENT_TOOL_STARTED {
-        return VerbosityTier::Internal;
     }
     VerbosityTier::Normal
 }
@@ -222,7 +209,7 @@ mod tests {
     #[test]
     fn classify_quiet() {
         assert_eq!(
-            classify_event_verbosity(EVENT_FINAL_REPORT),
+            classify_event_verbosity(EVENT_GENERAL_FAILED),
             VerbosityTier::Quiet
         );
     }

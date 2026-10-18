@@ -146,8 +146,9 @@ fn thinking_step_extraction() {
     let mut data = Map::new();
     data.insert("step_id".into(), json!("s1"));
     data.insert("description".into(), json!("plan next"));
-    let line = extract_thinking_step(Some(&allow), "soothe.cognition.plan.step.started", &data)
-        .expect("line");
+    let line =
+        extract_thinking_step(Some(&allow), "soothe.cognition.strange_loop.step.started", &data)
+            .expect("line");
     assert!(line.contains("s1"));
     assert!(extract_thinking_step(Some(&allow), "soothe.unknown", &data).is_none());
 }

@@ -3,7 +3,7 @@
 //! Each `send_*` method emits the protocol-1 envelope and returns immediately
 //! without waiting for a response. Callers that need the response should use
 //! the blocking convenience methods on [`crate::Client`] (e.g. `loop_get`,
-//! `job_status`, `autopilot_status`).
+//! `job_status`).
 
 use serde_json::{json, Map, Value};
 
@@ -140,40 +140,6 @@ impl Client {
             params.insert("verbose".into(), json!(true));
         }
         self.send_envelope(new_request_with_id("loop_get", params, rid))
-            .await
-    }
-
-    /// Send `loop_tree` request envelope (Go `SendLoopTree` parity).
-    pub async fn send_loop_tree(
-        &self,
-        loop_id: &str,
-        format: &str,
-        request_id: &[&str],
-    ) -> Result<()> {
-        let rid = opt_request_id(request_id);
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        if !format.is_empty() {
-            params.insert("format".into(), json!(format));
-        }
-        self.send_envelope(new_request_with_id("loop_tree", params, rid))
-            .await
-    }
-
-    /// Send `loop_prune` request envelope (Go `SendLoopPrune` parity).
-    pub async fn send_loop_prune(
-        &self,
-        loop_id: &str,
-        keep_latest: u32,
-        request_id: &[&str],
-    ) -> Result<()> {
-        let rid = opt_request_id(request_id);
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        if keep_latest > 0 {
-            params.insert("keep_latest".into(), json!(keep_latest));
-        }
-        self.send_envelope(new_request_with_id("loop_prune", params, rid))
             .await
     }
 
@@ -424,18 +390,24 @@ impl Client {
     }
 
     /// Fire-and-forget `job_create` (Go `SendJobCreate` parity).
+    /// `rail_id` is required (loop-native submission path).
     pub async fn send_job_create(
         &self,
         goal: &str,
+        rail_id: &str,
         workspace: Option<&str>,
         request_id: &[&str],
     ) -> Result<()> {
         if goal.is_empty() {
             return Err(crate::errors::Error::msg("goal is required"));
         }
+        if rail_id.is_empty() {
+            return Err(crate::errors::Error::msg("rail_id is required"));
+        }
         let rid = opt_request_id(request_id);
         let mut params = Map::new();
         params.insert("goal".into(), json!(goal));
+        params.insert("rail_id".into(), json!(rail_id));
         if let Some(ws) = workspace {
             if !ws.is_empty() {
                 params.insert("workspace".into(), json!(ws));

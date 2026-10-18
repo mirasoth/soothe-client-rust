@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+## 0.3.13 — 2026-10-18
+
+Adaptation to soothe host v1.2.0.
+
+### Added
+- **`job_create` requires `rail_id`** (loop-native submission path): `Client::job_create`,
+  `AsyncCommandClient::job_create` / `CommandClient::job_create`, and `send_job_create`
+  now take a required `rail_id` argument and send it as a param.
+- **Wire golden contract test** (`tests/wire_golden.rs`): pins the host-produced
+  `tests/fixtures/wire_golden.json` fixture by sha256, decodes every case (envelope
+  round-trips, legacy flat payload shapes, `stream_tool_update`, `card_frame`
+  passthrough via `card_projection`).
+- **`stream_terminal` parity**: host stamps `mode="messages"` frames with
+  `stream_terminal: true` as ack-required terminal markers. New helpers
+  `STREAM_TERMINAL_FIELD`, `is_stream_terminal_wire_dict`, `is_stream_terminal_data`;
+  `inbound_needs_delivery_ack` now acks messages-mode terminal frames.
+
+### Changed
+- Phases: `is_loop_assistant_phase` and `DEFAULT_DELIVERABLE_PHASES` drop `quiz`
+  (no host producer) and add `goal_interrupted` (non-success terminal marker).
+- Tool event namespaces repointed to live host types:
+  `soothe.tool.invocation.started` / `soothe.tool.invocation.completed`
+  (`EVENT_TOOL_STARTED` / `EVENT_TOOL_COMPLETED`) and `soothe.error.tool`
+  (`EVENT_TOOL_ERROR`).
+- Thinking-step allowlist pruned to live host events (`plan.created`, `goal.created`,
+  tool invocation start, `strange_loop.step.started/queued/completed`); dead
+  `plan.step.*`, `lifecycle.iteration.*`, `agent.loop.*`, and `plan.batch.started`
+  arms removed.
+- `interaction_mode` docs corrected to `agent`|`ask`|`plan`|`bypass`.
+- Integration tests and `06_jobs` example follow the loop-native `job_create`
+  contract (response carries `loop_id` + `status=submitted`; status via `loop_get`;
+  legacy `job_status`/`job_cancel` are service-unavailable stubs).
+
+### Removed
+- Dead RPC surface the v1.2.0 daemon no longer handles (returns -32601): the
+  `autopilot_*` method family on `Client` and both command clients, plus
+  `loop_tree` / `loop_prune` and their `send_*` envelope variants.
+- Dead event constants with no host producer: `EVENT_PLAN_BATCH_STARTED`,
+  `EVENT_FINAL_REPORT`, `EVENT_MESSAGE_RECEIVED`, `EVENT_MESSAGE_SENT`, and their
+  classifier branches.
+
 ## 0.3.12 — 2026-10-07
 
 ### Removed

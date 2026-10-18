@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 More patterns: [`examples/`](examples/) (hello → streaming → multi-turn → pool → jobs).
 
 Route to a specialist with `preferred_subagent` (canonical ids:
-`deep_research`, `academic_research`, `browser_use`, `planner`):
+`deep_research`, `browser_use`):
 
 ```rust
 use soothe_client::{Client, SendInputOptions};

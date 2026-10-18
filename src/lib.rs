@@ -41,11 +41,10 @@ pub use events::{
     EVENT_CARD_FINALIZED, EVENT_CARD_REPLAY_BEGIN, EVENT_CARD_REPLAY_END, EVENT_CARD_UPDATED,
     EVENT_DEEP_RESEARCH_COMPLETED, EVENT_DEEP_RESEARCH_CRAWL_SUMMARY,
     EVENT_DEEP_RESEARCH_GATHER_SUMMARY, EVENT_DEEP_RESEARCH_PROGRESS, EVENT_DEEP_RESEARCH_STARTED,
-    EVENT_DEEP_RESEARCH_STEP_COMPLETED, EVENT_FINAL_REPORT, EVENT_GENERAL_FAILED,
+    EVENT_DEEP_RESEARCH_STEP_COMPLETED, EVENT_GENERAL_FAILED,
     EVENT_GOAL_BATCH_STARTED, EVENT_GOAL_COMPLETED, EVENT_GOAL_CREATED, EVENT_GOAL_DEFERRED,
     EVENT_GOAL_DIRECTIVES_APPLIED, EVENT_GOAL_FAILED, EVENT_GOAL_REPORTED,
-    EVENT_LOOP_REATTACHED_WIRE, EVENT_MESSAGE_RECEIVED, EVENT_MESSAGE_SENT,
-    EVENT_PLAN_BATCH_STARTED, EVENT_PLAN_CREATED, EVENT_PLAN_REFLECTED, EVENT_REPLAY_COMPLETE,
+    EVENT_LOOP_REATTACHED_WIRE, EVENT_PLAN_CREATED, EVENT_PLAN_REFLECTED, EVENT_REPLAY_COMPLETE,
     EVENT_STRANGE_LOOP_COMPLETED, EVENT_STRANGE_LOOP_CONTEXT_COMPACTED,
     EVENT_STRANGE_LOOP_PLAN_DECISION, EVENT_STRANGE_LOOP_REASONED, EVENT_STRANGE_LOOP_STARTED,
     EVENT_STRANGE_LOOP_STEP_COMPLETED, EVENT_STRANGE_LOOP_STEP_QUEUED,
@@ -73,8 +72,9 @@ pub use protocol::{
 };
 pub use session::{bootstrap_loop_session, connect_with_retries, BootstrapOptions};
 pub use stream_terminal::{
-    extract_loop_id_from_inbound, inbound_needs_delivery_ack, is_turn_end_custom_data,
-    is_turn_progress_chunk, stale_pending_frame_label, STREAM_END,
+    extract_loop_id_from_inbound, inbound_needs_delivery_ack, is_stream_terminal_data,
+    is_stream_terminal_wire_dict, is_turn_end_custom_data, is_turn_progress_chunk,
+    stale_pending_frame_label, STREAM_END, STREAM_TERMINAL_FIELD,
 };
 pub use turn_boundary::{
     format_turn_id, frame_seq, frame_turn_id, is_idle_terminal_allowed, is_turn_terminal_allowed,

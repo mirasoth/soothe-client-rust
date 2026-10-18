@@ -79,7 +79,7 @@ pub struct SendInputOptions {
     pub clarification_answer: bool,
     /// Clarification answers payload.
     pub clarification_answers: Option<Value>,
-    /// Interaction mode (`agent`|`ask`).
+    /// Interaction mode (`agent`|`ask`|`plan`|`bypass`).
     pub interaction_mode: Option<String>,
     /// Autopilot rail id (pins the turn to a specific autopilot rail).
     pub autopilot_rail_id: Option<String>,
@@ -769,44 +769,6 @@ impl Client {
             .await
     }
 
-    /// `loop_tree`.
-    pub async fn loop_tree(
-        &self,
-        loop_id: &str,
-        format: Option<&str>,
-    ) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        if let Some(f) = format {
-            if !f.is_empty() {
-                params.insert("format".into(), json!(f));
-            }
-        }
-        self.request("loop_tree", params, Duration::from_secs(15))
-            .await
-    }
-
-    /// `loop_prune`.
-    pub async fn loop_prune(
-        &self,
-        loop_id: &str,
-        retention_days: Option<i32>,
-        dry_run: bool,
-    ) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("loop_id".into(), json!(loop_id));
-        if let Some(d) = retention_days {
-            if d > 0 {
-                params.insert("retention_days".into(), json!(d));
-            }
-        }
-        if dry_run {
-            params.insert("dry_run".into(), json!(true));
-        }
-        self.request("loop_prune", params, Duration::from_secs(30))
-            .await
-    }
-
     /// `loop_delete`.
     pub async fn loop_delete(&self, loop_id: &str) -> Result<Map<String, Value>> {
         let mut params = Map::new();
@@ -840,14 +802,23 @@ impl Client {
             .await
     }
 
-    /// `job_create` on this long-lived connection.
+    /// `job_create` on this long-lived connection. `rail_id` is required
+    /// (loop-native submission path).
     pub async fn job_create(
         &self,
         goal: &str,
+        rail_id: &str,
         workspace: Option<&str>,
     ) -> Result<Map<String, Value>> {
+        if goal.trim().is_empty() {
+            return Err(crate::errors::Error::msg("goal is required"));
+        }
+        if rail_id.trim().is_empty() {
+            return Err(crate::errors::Error::msg("rail_id is required"));
+        }
         let mut params = Map::new();
         params.insert("goal".into(), json!(goal));
+        params.insert("rail_id".into(), json!(rail_id));
         if let Some(ws) = workspace {
             params.insert("workspace".into(), json!(ws));
         }
@@ -910,102 +881,6 @@ impl Client {
         }
         self.request("job_guidance", params, Duration::from_secs(30))
             .await
-    }
-
-    /// `autopilot_status`.
-    pub async fn autopilot_status(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_status", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_submit`.
-    pub async fn autopilot_submit(
-        &self,
-        description: &str,
-        priority: i32,
-        workspace: Option<&str>,
-    ) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("description".into(), json!(description));
-        params.insert("priority".into(), json!(priority));
-        if let Some(ws) = workspace {
-            params.insert("workspace".into(), json!(ws));
-        }
-        self.request("autopilot_submit", params, Duration::from_secs(30))
-            .await
-    }
-
-    /// `autopilot_list_goals`.
-    pub async fn autopilot_list_goals(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_list_goals", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_get_goal`.
-    pub async fn autopilot_get_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.request("autopilot_get_goal", params, Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_cancel_goal`.
-    pub async fn autopilot_cancel_goal(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.request("autopilot_cancel_goal", params, Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_cancel_all`.
-    pub async fn autopilot_cancel_all(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_cancel_all", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_wake`.
-    pub async fn autopilot_wake(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_wake", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_dream`.
-    pub async fn autopilot_dream(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_dream", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_resume`.
-    pub async fn autopilot_resume(&self, goal_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("goal_id".into(), json!(goal_id));
-        self.request("autopilot_resume", params, Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_list_jobs`.
-    pub async fn autopilot_list_jobs(&self) -> Result<Map<String, Value>> {
-        self.request("autopilot_list_jobs", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// `autopilot_get_job`.
-    pub async fn autopilot_get_job(&self, job_id: &str) -> Result<Map<String, Value>> {
-        let mut params = Map::new();
-        params.insert("job_id".into(), json!(job_id));
-        self.request("autopilot_get_job", params, Duration::from_secs(15))
-            .await
-    }
-
-    /// Subscribe to `autopilot_events` (long-lived worker stream).
-    pub async fn autopilot_subscribe(&self) -> Result<String> {
-        self.subscribe("autopilot_events", Map::new(), Duration::from_secs(15))
-            .await
-    }
-
-    /// Unsubscribe from an autopilot events subscription.
-    pub async fn autopilot_unsubscribe(&self, subscription_id: &str) -> Result<()> {
-        self.unsubscribe(subscription_id).await
     }
 
     /// `cron_add`.

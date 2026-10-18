@@ -1,4 +1,4 @@
-//! CommandClient job create / status / cancel.
+//! AsyncCommandClient job create, then loop-native status via loop_get.
 
 #[path = "common/mod.rs"]
 mod common;
@@ -11,31 +11,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
     let client = AsyncCommandClient::new(common::daemon_url());
 
-    match client.autopilot_status().await {
-        Ok(status) => println!("autopilot_status: {status:?}"),
-        Err(e) => println!("autopilot_status skipped: {e}"),
-    }
-
     let created = client
         .job_create(
             "Echo: rust client smoke job — reply done",
+            "auto",
             Some(&dir.path().display().to_string()),
         )
         .await?;
     println!("created: {created:?}");
-    let job_id = created
-        .get("job_id")
-        .or_else(|| created.get("id"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    if job_id.is_empty() {
-        eprintln!("no job_id in create response");
+    // Loop-native submission: response carries loop_id + status=submitted.
+    let Some(loop_id) = created.get("loop_id").and_then(|v| v.as_str()) else {
+        eprintln!("no loop_id in create response");
         return Ok(());
-    }
-    let status = client.job_status(&job_id).await?;
-    println!("status: {status:?}");
-    let cancelled = client.job_cancel(&job_id).await?;
-    println!("cancel: {cancelled:?}");
+    };
+    let mut params = serde_json::Map::new();
+    params.insert("loop_id".into(), serde_json::json!(loop_id));
+    let status = client.request("loop_get", params).await?;
+    println!("loop_get: {status:?}");
     Ok(())
 }

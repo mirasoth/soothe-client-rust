@@ -11,8 +11,8 @@ pub const EMBED: &str = "embed";
 
 /// Default deliverable phases used by EventClassifier.
 pub const DEFAULT_DELIVERABLE_PHASES: &[&str] = &[
-    "quiz",
     "goal_completion",
+    "goal_interrupted",
     "chitchat",
     "text_completion",
     "image_to_text",
