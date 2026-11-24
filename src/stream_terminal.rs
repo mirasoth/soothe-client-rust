@@ -240,8 +240,12 @@ mod tests {
 
     #[test]
     fn stream_terminal_wire_dict() {
-        assert!(is_stream_terminal_wire_dict(&json!({"stream_terminal": true})));
-        assert!(!is_stream_terminal_wire_dict(&json!({"stream_terminal": false})));
+        assert!(is_stream_terminal_wire_dict(
+            &json!({"stream_terminal": true})
+        ));
+        assert!(!is_stream_terminal_wire_dict(
+            &json!({"stream_terminal": false})
+        ));
         assert!(!is_stream_terminal_wire_dict(&json!({})));
     }
 

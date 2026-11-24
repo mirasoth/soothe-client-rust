@@ -290,17 +290,22 @@ async fn integration_jobs_create_status_cancel() {
             Some("submitted")
         );
         // Job status is loop-native: query the loop returned by job_create.
-        let _ = client.request("loop_get", {
-            let mut p = Map::new();
-            p.insert("loop_id".into(), json!(loop_id));
-            p
-        }).await.expect("loop_get");
+        let _ = client
+            .request("loop_get", {
+                let mut p = Map::new();
+                p.insert("loop_id".into(), json!(loop_id));
+                p
+            })
+            .await
+            .expect("loop_get");
         // Cancel: purge the loop created by this test.
-        let _ = client.request("loop_delete", {
-            let mut p = Map::new();
-            p.insert("loop_id".into(), json!(loop_id));
-            p
-        }).await;
+        let _ = client
+            .request("loop_delete", {
+                let mut p = Map::new();
+                p.insert("loop_id".into(), json!(loop_id));
+                p
+            })
+            .await;
     })
     .await;
 }
@@ -353,11 +358,13 @@ async fn integration_jobs_pause_resume_dag_guidance() {
             Ok(v) => eprintln!("job_guidance: {v:?}"),
             Err(e) => eprintln!("job_guidance soft-fail (expected on v1.2.0): {e}"),
         }
-        let _ = client.request("loop_delete", {
-            let mut p = Map::new();
-            p.insert("loop_id".into(), json!(loop_id));
-            p
-        }).await;
+        let _ = client
+            .request("loop_delete", {
+                let mut p = Map::new();
+                p.insert("loop_id".into(), json!(loop_id));
+                p
+            })
+            .await;
     })
     .await;
 }

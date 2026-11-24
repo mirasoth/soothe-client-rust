@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.14 — 2026-11-24
+
+### Added
+- Wire-golden fixture refreshed with the host's optional step retry/recovery fields
+  (`step_retry_attempt`, `step_retry_max`, `step_recovered`, `step_prior_tool_calls`,
+  `step_prior_duration_ms` on `STEP_PROGRESS`); fixture pin updated.
+
 ## 0.3.13 — 2026-10-18
 
 Adaptation to soothe host v1.2.0.

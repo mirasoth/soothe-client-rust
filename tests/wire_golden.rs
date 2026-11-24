@@ -116,7 +116,10 @@ fn ai_tool_calls_survive_decode() {
 fn stream_tool_update_case_matches_live_constant() {
     let doc = fixture();
     let wire = &doc["cases"]["stream_tool_update"];
-    assert_eq!(wire["type"].as_str().unwrap(), EVENT_STREAM_TOOL_CALL_UPDATE);
+    assert_eq!(
+        wire["type"].as_str().unwrap(),
+        EVENT_STREAM_TOOL_CALL_UPDATE
+    );
     assert!(is_stream_terminal_data(&json!([
         {"stream_terminal": true, "chunk_position": "last"},
         {}
@@ -139,6 +142,9 @@ fn card_frame_passthrough_via_projection() {
     let mut projection = CardProjection::new();
     assert!(projection.apply(&custom));
     assert!(!projection.replaying());
-    assert_eq!(Value::Object(projection.get(&card_id).unwrap().clone()), frame);
+    assert_eq!(
+        Value::Object(projection.get(&card_id).unwrap().clone()),
+        frame
+    );
     assert_eq!(projection.snapshot().len(), 1);
 }
