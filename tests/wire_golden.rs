@@ -11,7 +11,7 @@ use soothe_client::events::EVENT_STREAM_TOOL_CALL_UPDATE;
 use soothe_client::protocol::{decode_message, decode_message_typed, TypedMessage};
 use soothe_client::stream_terminal::is_stream_terminal_data;
 
-const FIXTURE_SHA256: &str = "ba5a5a408fc2c259b768eae2915289de1820a931da37aad30fdd410d52b16627";
+const FIXTURE_SHA256: &str = "38904a5672882b345a3f9786566893220e1e37da51336df22301ade30b5a6cef";
 
 const ENVELOPE_CASES: &[&str] = &["connection_init", "response", "error"];
 const MESSAGE_CASES: &[&str] = &[
